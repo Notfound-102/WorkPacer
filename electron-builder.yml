@@ -1,0 +1,51 @@
+appId: com.idlepulse.desktop
+productName: IdlePulse
+directories:
+  buildResources: resources
+  output: dist
+files:
+  - "!**/.vscode/*"
+  - "!src/*"
+  - "!electron.vite.config.{js,ts,mjs,cjs}"
+  - "!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}"
+  - "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}"
+  - "!tests/*"
+asarUnpack:
+  - "**/*.node"
+win:
+  executableName: IdlePulse
+  target:
+    - target: nsis
+      arch:
+        - x64
+        - arm64
+    - target: portable
+      arch:
+        - x64
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
+mac:
+  category: public.app-category.productivity
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+  extendInfo:
+    NSMicrophoneUsageDescription: IdlePulse checks active call status to avoid false idle detection during meetings.
+linux:
+  target:
+    - AppImage
+    - deb
+  maintainer: IdlePulse Team
+  category: Utility
+npmRebuild: true
