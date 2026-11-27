@@ -3,16 +3,18 @@ import {
   AnalyticsRange,
   AppSettings,
   DailyReportDocument,
-  IdlePulseAPI,
   IdleTag,
   LanguageCode,
   LiveTrackingState,
   MainTabId,
   PomodoroPreset,
-  StickyWidgetPrefs
+  QuickIdlePreset,
+  QuickPresetIcon,
+  StickyWidgetPrefs,
+  WorkPacerAPI
 } from '../shared/types'
 
-const api: IdlePulseAPI = {
+const api: WorkPacerAPI = {
   getInitialData: () => ipcRenderer.invoke('app:getInitialData'),
 
   onStateUpdate: (cb: (state: LiveTrackingState) => void) => {
@@ -25,6 +27,12 @@ const api: IdlePulseAPI = {
     const handler = (_e: unknown, settings: AppSettings): void => cb(settings)
     ipcRenderer.on('settings:updated', handler)
     return () => ipcRenderer.removeListener('settings:updated', handler)
+  },
+
+  onPresetsUpdate: (cb: (presets: QuickIdlePreset[]) => void) => {
+    const handler = (_e: unknown, presets: QuickIdlePreset[]): void => cb(presets)
+    ipcRenderer.on('presets:updated', handler)
+    return () => ipcRenderer.removeListener('presets:updated', handler)
   },
 
   onNavigateTab: (cb: (tab: MainTabId) => void) => {
@@ -40,6 +48,18 @@ const api: IdlePulseAPI = {
   startManualIdle: (tag: IdleTag, note?: string) =>
     ipcRenderer.invoke('tracking:startManualIdle', tag, note),
   resumeFromIdle: () => ipcRenderer.invoke('tracking:resumeFromIdle'),
+  togglePauseTracking: () => ipcRenderer.invoke('tracking:togglePause'),
+
+  getQuickIdlePresets: () => ipcRenderer.invoke('presets:get'),
+  createQuickIdlePreset: (input: { label: string; icon: QuickPresetIcon; tag: IdleTag }) =>
+    ipcRenderer.invoke('presets:create', input),
+  updateQuickIdlePreset: (
+    id: string,
+    updates: Partial<{ label: string; icon: QuickPresetIcon; tag: IdleTag }>
+  ) => ipcRenderer.invoke('presets:update', id, updates),
+  deleteQuickIdlePreset: (id: string) => ipcRenderer.invoke('presets:delete', id),
+  triggerQuickIdlePreset: (id: string) => ipcRenderer.invoke('presets:trigger', id),
+
   submitReturnTag: (sessionId: number, tag: IdleTag | null, note?: string) =>
     ipcRenderer.invoke('tracking:submitReturnTag', sessionId, tag, note),
   dismissReturnPopup: () => ipcRenderer.invoke('tracking:dismissReturnPopup'),
@@ -78,4 +98,5 @@ const api: IdlePulseAPI = {
   saveDailyReport: (doc: DailyReportDocument) => ipcRenderer.invoke('report:save', doc)
 }
 
+contextBridge.exposeInMainWorld('workPacer', api)
 contextBridge.exposeInMainWorld('idlePulse', api)

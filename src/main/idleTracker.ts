@@ -7,6 +7,8 @@ import {
   PendingReturnPopup,
   PomodoroPreset,
   PomodoroState,
+  QuickIdlePreset,
+  ResolvedTheme,
   SessionRecord,
   SmartExceptionReason,
   TaskRecord
@@ -18,6 +20,7 @@ export interface TrackerDependencies {
   db: IdlePulseDatabase
   getSystemIdleTime: () => number
   detectSmartException: () => Promise<SmartExceptionReason>
+  getResolvedTheme?: () => ResolvedTheme
   now?: () => number
 }
 
@@ -25,10 +28,15 @@ export class IdleTrackingEngine extends EventEmitter {
   private db: IdlePulseDatabase
   private getSystemIdleTime: () => number
   private detectSmartException: () => Promise<SmartExceptionReason>
+  private getResolvedTheme: () => ResolvedTheme
   private now: () => number
 
   private tickTimer: NodeJS.Timeout | null = null
-  private currentSession: SessionRecord
+  private currentSession: SessionRecord | null = null
+  private isPaused = false
+  private pausedStartedAt = 0
+  private currentPresetLabel: string | null = null
+
   private systemLockedOrSuspended = false
   private manualIdleStartedAt = 0
   private returnReminderFiredForSessionId: number | null = null
@@ -61,13 +69,15 @@ export class IdleTrackingEngine extends EventEmitter {
     this.db = deps.db
     this.getSystemIdleTime = deps.getSystemIdleTime
     this.detectSmartException = deps.detectSmartException
+    this.getResolvedTheme =
+      deps.getResolvedTheme ??
+      (() => (this.db.getSettings().theme === 'dark' ? 'dark' : 'light'))
     this.now = deps.now ?? (() => Date.now())
 
     const settings = this.db.getSettings()
     this.eyeCareRemainingSec = settings.eyeCareIntervalMinutes * 60
 
     const initNow = this.now()
-    // Recover any crash / shutdown / overnight gap before starting new active session
     this.db.recoverFromShutdownOrSleep(initNow, settings.idleThresholdMinutes * 60)
 
     this.currentSession = this.db.startSession({
@@ -91,20 +101,34 @@ export class IdleTrackingEngine extends EventEmitter {
       this.tickTimer = null
     }
     const nowMs = this.now()
-    this.db.closeSession(this.currentSession.id, nowMs)
+    if (this.currentSession) {
+      this.db.closeSession(this.currentSession.id, nowMs)
+    }
     this.db.recordHeartbeat(nowMs, 'stopped', null)
   }
 
   public async tick(): Promise<void> {
     const nowMs = this.now()
     const settings = this.db.getSettings()
+
+    if (this.isPaused || !this.currentSession) {
+      if (nowMs - this.lastHeartbeatMs >= 15_000) {
+        this.lastHeartbeatMs = nowMs
+        this.db.recordHeartbeat(nowMs, 'paused', null)
+      }
+      this.emitState()
+      return
+    }
+
     const osIdleSec = this.systemLockedOrSuspended
-      ? Math.max(settings.idleThresholdMinutes * 60, Math.round((nowMs - this.currentSession.startTime) / 1000))
+      ? Math.max(
+          settings.idleThresholdMinutes * 60,
+          Math.round((nowMs - this.currentSession.startTime) / 1000)
+        )
       : this.getSystemIdleTime()
 
     const thresholdSec = Math.max(60, settings.idleThresholdMinutes * 60)
 
-    // Refresh Smart Exception status near or above threshold
     if (
       settings.smartExceptionMode !== 'off' &&
       osIdleSec >= Math.max(15, thresholdSec - 10) &&
@@ -124,9 +148,8 @@ export class IdleTrackingEngine extends EventEmitter {
           settings.smartExceptionMode === 'ignore' &&
           this.currentSmartException !== 'none'
         ) {
-          // Smart Exception: Ignore idle & keep Active while watching fullscreen video or in call
+          // Smart Exception: keep Active state
         } else {
-          // Transition Active -> Auto Idle (backdate start to when user stopped input)
           const backdatedStart = this.systemLockedOrSuspended
             ? nowMs
             : Math.max(this.currentSession.startTime, nowMs - osIdleSec * 1000)
@@ -141,6 +164,7 @@ export class IdleTrackingEngine extends EventEmitter {
             smartException: flagReason,
             isManual: false
           })
+          this.currentPresetLabel = null
           this.returnReminderFiredForSessionId = null
         }
       }
@@ -150,24 +174,24 @@ export class IdleTrackingEngine extends EventEmitter {
       }
     } else if (this.currentSession.type === 'manual_idle') {
       const graceElapsed = nowMs - this.manualIdleStartedAt > 20_000
-      if (settings.autoResumeManualIdle && !this.systemLockedOrSuspended && graceElapsed && osIdleSec < 2) {
+      if (
+        settings.autoResumeManualIdle &&
+        !this.systemLockedOrSuspended &&
+        graceElapsed &&
+        osIdleSec < 2
+      ) {
         this.transitionIdleToActive(nowMs, settings)
       }
     }
 
-    // --- Health & Wellness Timers ---
     this.updateHealthTimers(nowMs, settings)
-
-    // --- Pomodoro Timer ---
     this.updatePomodoroTimer()
 
-    // --- Periodic SQLite Heartbeat (every 15s) ---
     if (nowMs - this.lastHeartbeatMs >= 15_000) {
       this.lastHeartbeatMs = nowMs
       this.db.recordHeartbeat(nowMs, this.currentSession.type, this.currentSession.id)
     }
 
-    // --- Scheduled OS Notifications (End of Shift, Daily/Weekly Summary) ---
     if (nowMs - this.lastScheduledCheckMs >= 15_000) {
       this.lastScheduledCheckMs = nowMs
       this.checkScheduledNotifications(nowMs, settings)
@@ -177,17 +201,21 @@ export class IdleTrackingEngine extends EventEmitter {
   }
 
   private transitionIdleToActive(nowMs: number, settings: AppSettings): void {
+    if (!this.currentSession) {
+      this.currentSession = this.db.startSession({ type: 'active', startTime: nowMs })
+      return
+    }
     const closed = this.db.closeSession(this.currentSession.id, nowMs)
     const wasAutoIdle = this.currentSession.type === 'auto_idle'
     const hadTag = Boolean(this.currentSession.tag)
 
+    this.currentPresetLabel = null
     this.currentSession = this.db.startSession({
       type: 'active',
       startTime: nowMs
     })
 
     if (closed && closed.durationSec >= 180) {
-      // Reset continuous sitting streak after >= 3 min break
       this.continuousActiveSec = 0
       this.sittingAlertFired = false
     }
@@ -212,7 +240,8 @@ export class IdleTrackingEngine extends EventEmitter {
   }
 
   private updateHealthTimers(nowMs: number, settings: AppSettings): void {
-    // Active break overlay countdown (e.g. 20-second 20-20-20 countdown)
+    if (!this.currentSession) return
+
     if (this.activeBreakOverlay) {
       if (this.activeBreakOverlay.countdownSec > 1) {
         this.activeBreakOverlay = {
@@ -228,7 +257,6 @@ export class IdleTrackingEngine extends EventEmitter {
     }
 
     if (this.currentSession.type === 'active') {
-      // 1) 20-20-20 Eye Care
       if (settings.eyeCareEnabled) {
         this.eyeCareRemainingSec = Math.max(0, this.eyeCareRemainingSec - 1)
         if (this.eyeCareRemainingSec === 0) {
@@ -238,7 +266,6 @@ export class IdleTrackingEngine extends EventEmitter {
         this.eyeCareRemainingSec = settings.eyeCareIntervalMinutes * 60
       }
 
-      // 2) Long Sitting Alert
       this.continuousActiveSec += 1
       if (
         settings.longSittingEnabled &&
@@ -254,7 +281,6 @@ export class IdleTrackingEngine extends EventEmitter {
         })
       }
     } else {
-      // Idle: check if break >= 3m resets continuous sitting, and check Return-to-Work nudge
       const idleElapsedSec = Math.max(0, Math.round((nowMs - this.currentSession.startTime) / 1000))
       if (idleElapsedSec >= 180) {
         this.continuousActiveSec = 0
@@ -302,7 +328,6 @@ export class IdleTrackingEngine extends EventEmitter {
         remainingSec: this.pomodoro.remainingSec - 1
       }
     } else {
-      // Phase finished -> switch phase
       if (this.pomodoro.phase === 'focus') {
         const nextCount = this.pomodoro.completedFocusCount + 1
         this.pomodoro = {
@@ -329,7 +354,6 @@ export class IdleTrackingEngine extends EventEmitter {
     const curMin = dt.getHours() * 60 + dt.getMinutes()
     const shiftEndMin = parseTimeToMinutes(settings.shiftEnd)
 
-    // 1) End-of-Shift Nippo Reminder
     if (settings.endOfShiftNotification && curMin >= shiftEndMin && curMin <= shiftEndMin + 30) {
       const key = `end_of_shift_${dateStr}_${settings.shiftEnd}`
       if (!this.db.hasNotificationFired(key)) {
@@ -338,7 +362,6 @@ export class IdleTrackingEngine extends EventEmitter {
       }
     }
 
-    // 2) Daily Summary Notification (10 minutes after shift end)
     if (
       settings.dailySummaryNotification &&
       curMin >= shiftEndMin + 10 &&
@@ -351,7 +374,6 @@ export class IdleTrackingEngine extends EventEmitter {
       }
     }
 
-    // 3) Weekly Summary Notification (Friday after shift end)
     if (settings.weeklySummaryNotification && dt.getDay() === 5 && curMin >= shiftEndMin + 15) {
       const key = `weekly_summary_${dateStr}`
       if (!this.db.hasNotificationFired(key)) {
@@ -362,9 +384,37 @@ export class IdleTrackingEngine extends EventEmitter {
   }
 
   // --- Public Actions ---
+  public togglePauseTracking(): void {
+    const nowMs = this.now()
+    if (!this.isPaused) {
+      if (this.currentSession) {
+        this.db.closeSession(this.currentSession.id, nowMs)
+        this.currentSession = null
+      }
+      if (this.pomodoro.running) {
+        this.pomodoro = { ...this.pomodoro, running: false }
+      }
+      this.isPaused = true
+      this.pausedStartedAt = nowMs
+      this.currentPresetLabel = null
+      this.db.recordHeartbeat(nowMs, 'paused', null)
+    } else {
+      this.isPaused = false
+      this.currentSession = this.db.startSession({
+        type: 'active',
+        startTime: nowMs
+      })
+      this.db.recordHeartbeat(nowMs, 'active', this.currentSession.id)
+    }
+    this.emitState()
+  }
+
   public startManualIdle(tag: IdleTag, note = ''): void {
     const nowMs = this.now()
-    this.db.closeSession(this.currentSession.id, nowMs)
+    this.isPaused = false
+    if (this.currentSession) {
+      this.db.closeSession(this.currentSession.id, nowMs)
+    }
     this.currentSession = this.db.startSession({
       type: 'manual_idle',
       startTime: nowMs,
@@ -372,15 +422,32 @@ export class IdleTrackingEngine extends EventEmitter {
       note,
       isManual: true
     })
+    this.currentPresetLabel = note || null
     this.manualIdleStartedAt = nowMs
     this.returnReminderFiredForSessionId = null
     this.db.recordHeartbeat(nowMs, 'manual_idle', this.currentSession.id)
     this.emitState()
   }
 
-  public resumeFromIdle(): void {
-    if (this.currentSession.type === 'active') return
+  public triggerQuickIdlePreset(presetId: string): QuickIdlePreset[] {
     const nowMs = this.now()
+    const preset = this.db.recordQuickIdlePresetUsage(presetId, nowMs)
+    if (preset) {
+      this.startManualIdle(preset.tag, preset.label)
+    }
+    return this.db.getQuickIdlePresets()
+  }
+
+  public resumeFromIdle(): void {
+    const nowMs = this.now()
+    if (this.isPaused) {
+      this.isPaused = false
+      this.currentSession = this.db.startSession({ type: 'active', startTime: nowMs })
+      this.db.recordHeartbeat(nowMs, 'active', this.currentSession.id)
+      this.emitState()
+      return
+    }
+    if (!this.currentSession || this.currentSession.type === 'active') return
     const settings = this.db.getSettings()
     this.systemLockedOrSuspended = false
     this.transitionIdleToActive(nowMs, settings)
@@ -391,7 +458,7 @@ export class IdleTrackingEngine extends EventEmitter {
   public handleSystemSuspendOrLock(reason: 'suspend' | 'lock-screen'): void {
     const nowMs = this.now()
     this.systemLockedOrSuspended = true
-    if (this.currentSession.type === 'active') {
+    if (!this.isPaused && this.currentSession?.type === 'active') {
       this.db.closeSession(this.currentSession.id, nowMs)
       this.currentSession = this.db.startSession({
         type: 'auto_idle',
@@ -400,18 +467,30 @@ export class IdleTrackingEngine extends EventEmitter {
         isManual: false
       })
     }
-    this.db.recordHeartbeat(nowMs, 'auto_idle', this.currentSession.id)
+    this.db.recordHeartbeat(
+      nowMs,
+      this.isPaused ? 'paused' : 'auto_idle',
+      this.currentSession?.id ?? null
+    )
     this.emitState()
   }
 
   public handleSystemResumeOrUnlock(): void {
     const nowMs = this.now()
     this.systemLockedOrSuspended = false
+    if (this.isPaused) {
+      this.emitState()
+      return
+    }
     const settings = this.db.getSettings()
-    if (this.currentSession.type === 'auto_idle') {
+    if (this.currentSession?.type === 'auto_idle') {
       this.transitionIdleToActive(nowMs, settings)
     }
-    this.db.recordHeartbeat(nowMs, this.currentSession.type, this.currentSession.id)
+    this.db.recordHeartbeat(
+      nowMs,
+      this.currentSession?.type ?? 'active',
+      this.currentSession?.id ?? null
+    )
     this.emitState()
   }
 
@@ -456,6 +535,9 @@ export class IdleTrackingEngine extends EventEmitter {
     customFocus?: number,
     customBreak?: number
   ): void {
+    if (this.isPaused) {
+      this.resumeFromIdle()
+    }
     const nextPreset = preset ?? this.pomodoro.preset
     let focusMinutes = this.pomodoro.focusMinutes
     let breakMinutes = this.pomodoro.breakMinutes
@@ -522,7 +604,7 @@ export class IdleTrackingEngine extends EventEmitter {
   public startTask(title: string, category = 'general'): TaskRecord {
     const nowMs = this.now()
     const task = this.db.startTask(title, nowMs, category)
-    if (this.currentSession.type !== 'active') {
+    if (this.isPaused || this.currentSession?.type !== 'active') {
       this.resumeFromIdle()
     } else {
       this.emitState()
@@ -540,19 +622,27 @@ export class IdleTrackingEngine extends EventEmitter {
     const todayStr = formatLocalDate(nowMs)
     const totals = this.db.getDayTotals(todayStr, nowMs)
     const activeTask = this.db.getActiveTask()
-    const elapsedSec = Math.max(0, Math.round((nowMs - this.currentSession.startTime) / 1000))
+    const sessionStart = this.isPaused
+      ? this.pausedStartedAt
+      : (this.currentSession?.startTime ?? nowMs)
+    const elapsedSec = Math.max(0, Math.round((nowMs - sessionStart) / 1000))
+
+    const status: LiveTrackingState['status'] = this.isPaused
+      ? 'paused'
+      : this.currentSession?.type === 'manual_idle'
+        ? 'manual_idle'
+        : this.currentSession?.type === 'auto_idle'
+          ? 'auto_idle'
+          : 'active'
 
     return {
-      status:
-        this.currentSession.type === 'manual_idle'
-          ? 'manual_idle'
-          : this.currentSession.type === 'auto_idle'
-            ? 'auto_idle'
-            : 'active',
+      status,
+      resolvedTheme: this.getResolvedTheme(),
       osIdleSec: this.getSystemIdleTime(),
-      currentSessionStart: this.currentSession.startTime,
+      currentSessionStart: sessionStart,
       currentSessionElapsedSec: elapsedSec,
-      currentManualTag: this.currentSession.tag,
+      currentManualTag: this.isPaused ? null : (this.currentSession?.tag ?? null),
+      currentPresetLabel: this.isPaused ? null : this.currentPresetLabel,
       currentSmartException: this.currentSmartException,
       activeTask: activeTask
         ? {

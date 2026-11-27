@@ -1,4 +1,9 @@
 node_modules/
 out/
 dist/
+dist-web/
 *.db
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.tsbuildinfo

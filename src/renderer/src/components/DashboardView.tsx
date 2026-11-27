@@ -20,6 +20,8 @@ import {
   FileJson,
   FileSpreadsheet,
   Flame,
+  Play,
+  Settings2,
   Target,
   TrendingDown
 } from 'lucide-react'
@@ -28,6 +30,7 @@ import {
   AnalyticsRange,
   AppSettings,
   LiveTrackingState,
+  QuickIdlePreset,
   SessionRecord
 } from '@shared/types'
 import { bridge } from '../lib/bridge'
@@ -37,19 +40,23 @@ import {
   getDaysAgoDateString,
   getTodayDateString
 } from '../lib/formatters'
+import { PresetIconView } from './WorkPacerLogo'
+import { QuickPresetsManager } from './QuickPresetsManager'
 
 interface DashboardViewProps {
   state: LiveTrackingState
   settings: AppSettings
+  presets: QuickIdlePreset[]
 }
 
-export const DashboardView: React.FC<DashboardViewProps> = ({ state, settings }) => {
+export const DashboardView: React.FC<DashboardViewProps> = ({ state, settings, presets }) => {
   const { t, i18n } = useTranslation()
   const [range, setRange] = useState<AnalyticsRange>('hour')
   const [analytics, setAnalytics] = useState<AnalyticsPayload | null>(null)
   const [exportStart, setExportStart] = useState(getDaysAgoDateString(6))
   const [exportEnd, setExportEnd] = useState(getTodayDateString())
   const [exportStatus, setExportStatus] = useState<string | null>(null)
+  const [showPresetModal, setShowPresetModal] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -106,19 +113,75 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ state, settings })
           id="dashboard-test-summary-btn"
           type="button"
           onClick={() => void bridge.sendSummaryNotificationNow('daily')}
-          className="btn-subtle px-3 py-1.5 text-xs font-medium flex items-center gap-1.5"
+          className="btn-subtle px-4 py-2 text-xs font-semibold flex items-center gap-1.5"
         >
           <Bell className="w-3.5 h-3.5 text-[var(--accent)]" />
           {t('dashboard.sendDailySummary')}
         </button>
       </div>
 
+      {/* Quick Manual Idle Strip (Frequency-Sorted + Manage Modal Trigger) */}
+      <div className="card-surface px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-[var(--text-secondary)] mr-1">
+            {t('presets.title')}:
+          </span>
+          {state.status !== 'active' ? (
+            <button
+              type="button"
+              onClick={() => void bridge.resumeFromIdle()}
+              className="btn-primary px-4 py-1.5 text-xs flex items-center gap-1.5"
+            >
+              <Play className="w-3.5 h-3.5" />
+              {t('status.resumeWork')}
+            </button>
+          ) : (
+            presets.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => void bridge.triggerQuickIdlePreset(preset.id)}
+                className="glass-pill-btn px-3.5 py-1.5 text-xs font-semibold flex items-center gap-1.5"
+              >
+                <PresetIconView icon={preset.icon} className="w-3.5 h-3.5 text-[var(--accent)]" />
+                <span>{preset.label}</span>
+                {preset.usageCount > 0 && (
+                  <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                    {preset.usageCount}
+                  </span>
+                )}
+              </button>
+            ))
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowPresetModal(true)}
+          className="btn-subtle px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 shrink-0"
+        >
+          <Settings2 className="w-3.5 h-3.5 text-[var(--accent)]" />
+          {t('presets.manageBtn')}
+        </button>
+      </div>
+
+      {/* Liquid Glass Preset Management Modal */}
+      {showPresetModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/30 dark:bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-4 animate-fluid-in">
+          <div className="floating-surface max-w-lg w-full p-6 rounded-3xl max-h-[85vh] overflow-y-auto">
+            <QuickPresetsManager
+              presets={presets}
+              onClose={() => setShowPresetModal(false)}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Top KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-        {/* 1. Active Time */}
         <div className="card-surface p-4 flex flex-col justify-between">
           <div className="flex items-center justify-between text-xs text-[var(--text-secondary)]">
-            <span className="font-medium">{t('dashboard.activeToday')}</span>
+            <span className="font-semibold">{t('dashboard.activeToday')}</span>
             <Activity className="w-4 h-4 text-[var(--accent)]" />
           </div>
           <div className="mt-2 font-mono text-2xl font-bold tabular-nums">
@@ -129,10 +192,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ state, settings })
           </div>
         </div>
 
-        {/* 2. Idle Time + Micro/Short/Long Breakdown */}
         <div className="card-surface p-4 flex flex-col justify-between">
           <div className="flex items-center justify-between text-xs text-[var(--text-secondary)]">
-            <span className="font-medium">{t('dashboard.idleToday')}</span>
+            <span className="font-semibold">{t('dashboard.idleToday')}</span>
             <Clock className="w-4 h-4 text-[var(--amber)]" />
           </div>
           <div className="mt-2 font-mono text-2xl font-bold tabular-nums">
@@ -154,10 +216,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ state, settings })
           </div>
         </div>
 
-        {/* 3. Active vs Idle Ratio Donut */}
         <div className="card-surface p-4 flex items-center justify-between gap-2">
           <div>
-            <div className="text-xs font-medium text-[var(--text-secondary)]">
+            <div className="text-xs font-semibold text-[var(--text-secondary)]">
               {t('dashboard.activeRatio')}
             </div>
             <div className="mt-1.5 font-mono text-2xl font-bold tabular-nums text-[var(--accent)]">
@@ -188,10 +249,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ state, settings })
           </div>
         </div>
 
-        {/* 4. Daily Goal Progress */}
         <div className="card-surface p-4 flex flex-col justify-between">
           <div className="flex items-center justify-between text-xs text-[var(--text-secondary)]">
-            <span className="font-medium">{t('dashboard.dailyGoal')}</span>
+            <span className="font-semibold">{t('dashboard.dailyGoal')}</span>
             <Target className="w-4 h-4 text-[var(--accent)]" />
           </div>
           <div className="mt-2 flex items-baseline justify-between">
@@ -216,16 +276,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ state, settings })
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 card-surface p-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold">{t('dashboard.chartTitle')}</h2>
-            <div className="inline-flex rounded-lg bg-[var(--bg-subtle)] p-0.5 border border-[var(--border-subtle)]">
+            <h2 className="text-sm font-bold">{t('dashboard.chartTitle')}</h2>
+            <div className="inline-flex rounded-full bg-[var(--bg-subtle)] p-0.5 border border-[var(--border-subtle)]">
               {(['hour', 'day', 'week'] as AnalyticsRange[]).map((r) => (
                 <button
                   key={r}
                   type="button"
                   onClick={() => setRange(r)}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                  className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
                     range === r
-                      ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-xs'
+                      ? 'bg-[var(--bg-glass-pill)] text-[var(--accent)] shadow-xs'
                       : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                   }`}
                 >
@@ -245,7 +305,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ state, settings })
                 data={analytics?.chartPoints ?? []}
                 margin={{ top: 8, right: 8, left: -18, bottom: 0 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="var(--border-subtle)"
+                  vertical={false}
+                />
                 <XAxis
                   dataKey="label"
                   tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
@@ -260,9 +324,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ state, settings })
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'var(--bg-surface)',
+                    backgroundColor: 'var(--bg-editor)',
                     borderColor: 'var(--border-strong)',
-                    borderRadius: '8px',
+                    borderRadius: '14px',
                     fontSize: '12px'
                   }}
                 />
@@ -271,14 +335,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ state, settings })
                   name={t('dashboard.activeLabel')}
                   stackId="a"
                   fill="var(--accent)"
-                  radius={[0, 0, 3, 3]}
+                  radius={[0, 0, 4, 4]}
                 />
                 <Bar
                   dataKey="idleMin"
                   name={t('dashboard.idleLabel')}
                   stackId="a"
                   fill="var(--amber)"
-                  radius={[4, 4, 0, 0]}
+                  radius={[6, 6, 0, 0]}
                 />
               </BarChart>
             </ResponsiveContainer>
@@ -289,7 +353,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ state, settings })
         <div className="card-surface p-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold">{t('dashboard.topIdleHours')}</h2>
+              <h2 className="text-sm font-bold">{t('dashboard.topIdleHours')}</h2>
               <TrendingDown className="w-4 h-4 text-[var(--amber)]" />
             </div>
 
@@ -321,17 +385,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ state, settings })
             </div>
           </div>
 
-          {/* Break Category Legend */}
           <div className="pt-3 mt-3 border-t border-[var(--border-subtle)] grid grid-cols-3 gap-1.5 text-[11px]">
-            <div className="p-1.5 rounded bg-[var(--bg-subtle)]">
+            <div className="p-2 rounded-xl bg-[var(--bg-subtle)]">
               <div className="font-semibold text-[var(--sky)]">{t('breakTypes.micro')}</div>
               <div className="text-[var(--text-muted)] truncate">{t('breakTypes.microDesc')}</div>
             </div>
-            <div className="p-1.5 rounded bg-[var(--bg-subtle)]">
+            <div className="p-2 rounded-xl bg-[var(--bg-subtle)]">
               <div className="font-semibold text-[var(--amber)]">{t('breakTypes.short')}</div>
               <div className="text-[var(--text-muted)] truncate">{t('breakTypes.shortDesc')}</div>
             </div>
-            <div className="p-1.5 rounded bg-[var(--bg-subtle)]">
+            <div className="p-2 rounded-xl bg-[var(--bg-subtle)]">
               <div className="font-semibold text-[var(--coral)]">{t('breakTypes.long')}</div>
               <div className="text-[var(--text-muted)] truncate">{t('breakTypes.longDesc')}</div>
             </div>
@@ -342,22 +405,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ state, settings })
       {/* Intraday Activity Timeline */}
       <div className="card-surface p-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold">{t('dashboard.intradayTimeline')}</h2>
+          <h2 className="text-sm font-bold">{t('dashboard.intradayTimeline')}</h2>
           <div className="flex items-center gap-3 text-xs text-[var(--text-secondary)]">
             <span className="inline-flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-xs bg-[var(--accent)]" />
+              <span className="w-2.5 h-2.5 rounded-full bg-[var(--accent)]" />
               {t('dashboard.activeLabel')}
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-xs bg-[var(--sky)]" />
+              <span className="w-2.5 h-2.5 rounded-full bg-[var(--sky)]" />
               {t('breakTypes.micro')}
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-xs bg-[var(--amber)]" />
+              <span className="w-2.5 h-2.5 rounded-full bg-[var(--amber)]" />
               {t('breakTypes.short')}
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-xs bg-[var(--coral)]" />
+              <span className="w-2.5 h-2.5 rounded-full bg-[var(--coral)]" />
               {t('breakTypes.long')}
             </span>
           </div>
@@ -370,7 +433,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ state, settings })
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 card-surface p-4 space-y-3 overflow-x-auto">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold flex items-center gap-1.5">
+            <h2 className="text-sm font-bold flex items-center gap-1.5">
               <Flame className="w-4 h-4 text-[var(--amber)]" />
               {t('dashboard.heatmapTitle')}
             </h2>
@@ -403,15 +466,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ state, settings })
                     mins === 0
                       ? 'bg-[var(--bg-subtle)]'
                       : mins < 10
-                        ? 'bg-amber-400/30'
+                        ? 'bg-amber-400/35'
                         : mins < 25
-                          ? 'bg-amber-500/60'
+                          ? 'bg-amber-500/65'
                           : 'bg-amber-500'
                   return (
                     <div
                       key={hr}
                       title={`${daysShort[dow]} ${String(hr).padStart(2, '0')}:00 — Idle ${mins}m`}
-                      className={`h-4 rounded-[3px] transition-colors ${intensity}`}
+                      className={`h-4 rounded-sm transition-colors ${intensity}`}
                     />
                   )
                 })}
@@ -425,7 +488,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ state, settings })
           <div className="space-y-2.5">
             <div className="flex items-center gap-2">
               <Download className="w-4 h-4 text-[var(--accent)]" />
-              <h2 className="text-sm font-semibold">{t('dashboard.exportTitle')}</h2>
+              <h2 className="text-sm font-bold">{t('dashboard.exportTitle')}</h2>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -452,7 +515,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ state, settings })
 
           <div className="space-y-2">
             {exportStatus && (
-              <div className="text-xs font-medium text-[var(--accent)] bg-[var(--accent-soft)] px-2.5 py-1.5 rounded-md">
+              <div className="text-xs font-medium text-[var(--accent)] bg-[var(--accent-soft)] px-3 py-1.5 rounded-full">
                 Exported: {exportStatus}
               </div>
             )}
@@ -470,7 +533,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ state, settings })
                 id="export-json-btn"
                 type="button"
                 onClick={() => void handleExport('json')}
-                className="btn-subtle py-2 px-3 text-xs font-medium flex items-center justify-center gap-1.5"
+                className="btn-subtle py-2 px-3 text-xs font-semibold flex items-center justify-center gap-1.5"
               >
                 <FileJson className="w-3.5 h-3.5 text-[var(--accent)]" />
                 {t('dashboard.exportJson')}
@@ -487,7 +550,7 @@ const IntradayTimelineStrip: React.FC<{ sessions: SessionRecord[] }> = ({ sessio
   const { t } = useTranslation()
   if (sessions.length === 0) {
     return (
-      <div className="h-9 rounded-lg bg-[var(--bg-subtle)] flex items-center justify-center text-xs text-[var(--text-muted)]">
+      <div className="h-9 rounded-full bg-[var(--bg-subtle)] flex items-center justify-center text-xs text-[var(--text-muted)]">
         {t('dashboard.noIdleData')}
       </div>
     )
@@ -500,7 +563,7 @@ const IntradayTimelineStrip: React.FC<{ sessions: SessionRecord[] }> = ({ sessio
 
   return (
     <div className="space-y-1.5">
-      <div className="w-full h-7 rounded-lg bg-[var(--bg-subtle)] overflow-hidden flex p-0.5 gap-[1px]">
+      <div className="w-full h-7 rounded-full bg-[var(--bg-subtle)] overflow-hidden flex p-1 gap-[2px]">
         {sessions.map((s) => {
           const end = s.endTime ?? now
           const widthPct = Math.max(0.6, ((end - s.startTime) / totalSpan) * 100)
@@ -515,20 +578,21 @@ const IntradayTimelineStrip: React.FC<{ sessions: SessionRecord[] }> = ({ sessio
           const label =
             s.type === 'active'
               ? t('dashboard.activeLabel')
-              : s.tag
-                ? t(`tags.${s.tag}`)
-                : t(`breakTypes.${s.breakCategory === 'none' ? 'micro' : s.breakCategory}`)
+              : s.note ||
+                (s.tag
+                  ? t(`tags.${s.tag}`)
+                  : t(`breakTypes.${s.breakCategory === 'none' ? 'micro' : s.breakCategory}`))
           return (
             <div
               key={s.id}
               style={{ width: `${widthPct}%` }}
               title={`${formatTimeHM(s.startTime)}–${formatTimeHM(end)} • ${label} (${formatDurationHuman(s.durationSec)})`}
-              className={`h-full first:rounded-l-md last:rounded-r-md ${color} transition-opacity hover:opacity-80`}
+              className={`h-full first:rounded-l-full last:rounded-r-full ${color} transition-opacity hover:opacity-80`}
             />
           )
         })}
       </div>
-      <div className="flex justify-between text-[11px] font-mono text-[var(--text-muted)] tabular-nums">
+      <div className="flex justify-between text-[11px] font-mono text-[var(--text-muted)] tabular-nums px-1">
         <span>{formatTimeHM(firstStart)}</span>
         <span>{formatTimeHM(firstStart + totalSpan / 2)}</span>
         <span>{formatTimeHM(lastEnd)}</span>

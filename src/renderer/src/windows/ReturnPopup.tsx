@@ -5,13 +5,13 @@ import {
   Footprints,
   Moon,
   MoreHorizontal,
-  Sparkles,
   Users,
   Utensils,
   X
 } from 'lucide-react'
 import { IdleTag, PendingReturnPopup } from '@shared/types'
 import { bridge } from '../lib/bridge'
+import { WorkPacerLogo } from '../components/WorkPacerLogo'
 
 interface ReturnPopupProps {
   popup: PendingReturnPopup
@@ -51,20 +51,18 @@ export const ReturnPopup: React.FC<ReturnPopupProps> = ({ popup, embedded = fals
     <div
       className={
         embedded
-          ? 'fixed bottom-5 right-5 z-50 w-[356px] floating-surface p-4 space-y-3'
-          : 'w-full h-full floating-surface p-4 space-y-3 flex flex-col justify-between'
+          ? 'fixed bottom-5 right-5 z-50 w-[372px] floating-surface p-4 space-y-3.5 animate-fluid-in'
+          : 'w-full h-full floating-surface p-4 space-y-3 flex flex-col justify-between animate-fluid-in overflow-y-auto'
       }
     >
-      <div className="drag-region flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-[var(--accent-soft)] text-[var(--accent)] flex items-center justify-center shrink-0">
-            <Sparkles className="w-4 h-4" />
-          </div>
+      <div className="drag-region flex items-start justify-between gap-2.5">
+        <div className="flex items-center gap-2.5">
+          <WorkPacerLogo size={28} />
           <div>
-            <h2 className="text-xs font-semibold text-[var(--accent)]">
+            <h2 className="text-xs font-bold text-[var(--accent)]">
               {t('returnPopup.title')}
             </h2>
-            <p className="text-sm font-semibold leading-snug">
+            <p className="text-sm font-semibold leading-snug mt-0.5">
               {t('returnPopup.prompt', { minutes: awayMinutes })}
             </p>
           </div>
@@ -73,13 +71,13 @@ export const ReturnPopup: React.FC<ReturnPopupProps> = ({ popup, embedded = fals
           id="return-popup-dismiss"
           type="button"
           onClick={() => void bridge.dismissReturnPopup()}
-          className="no-drag p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+          className="no-drag p-1.5 rounded-full text-[var(--text-muted)] hover:text-[var(--text-primary)]"
         >
           <X className="w-4 h-4" />
         </button>
       </div>
 
-      <div className="no-drag grid grid-cols-3 gap-1.5">
+      <div className="no-drag grid grid-cols-3 gap-2">
         {TAG_OPTIONS.map(({ tag, icon: Icon }) => {
           const isSelected = selectedTag === tag
           return (
@@ -87,10 +85,10 @@ export const ReturnPopup: React.FC<ReturnPopupProps> = ({ popup, embedded = fals
               key={tag}
               type="button"
               onClick={() => void handleTagClick(tag)}
-              className={`px-2.5 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5 border transition-colors ${
+              className={`glass-pill-btn px-3 py-2 text-xs font-semibold flex items-center justify-center gap-1.5 ${
                 isSelected
-                  ? 'bg-[var(--accent-soft)] border-[var(--accent)] text-[var(--accent)]'
-                  : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)] hover:border-[var(--border-strong)]'
+                  ? '!bg-[var(--accent-soft)] !border-[var(--accent)] !text-[var(--accent)]'
+                  : ''
               }`}
             >
               <Icon className="w-3.5 h-3.5 shrink-0 text-[var(--accent)]" />
@@ -106,17 +104,17 @@ export const ReturnPopup: React.FC<ReturnPopupProps> = ({ popup, embedded = fals
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder={t('returnPopup.notePlaceholder')}
-          className="input-control flex-1 !py-1.5 !px-2.5 !text-xs"
+          className="input-control flex-1 !rounded-full !py-1.5 !px-3.5 !text-xs"
         />
         {selectedTag === 'other' || note.trim() ? (
-          <button type="submit" className="btn-primary px-3 py-1.5 text-xs shrink-0">
+          <button type="submit" className="btn-primary px-3.5 py-1.5 text-xs shrink-0">
             {t('returnPopup.save')}
           </button>
         ) : (
           <button
             type="button"
             onClick={() => void bridge.dismissReturnPopup()}
-            className="btn-subtle px-3 py-1.5 text-xs shrink-0"
+            className="btn-subtle px-3.5 py-1.5 text-xs font-semibold shrink-0"
           >
             {t('returnPopup.skip')}
           </button>

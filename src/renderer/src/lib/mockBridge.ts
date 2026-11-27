@@ -6,15 +6,19 @@ import {
   DailyReportDocument,
   DEFAULT_SETTINGS,
   HeatmapCell,
-  IdlePulseAPI,
   IdleTag,
   LanguageCode,
   LiveTrackingState,
   MainTabId,
+  MAX_QUICK_IDLE_PRESETS,
   PomodoroPreset,
+  QuickIdlePreset,
+  QuickPresetIcon,
+  ResolvedTheme,
   SessionRecord,
   StickyWidgetPrefs,
-  TaskRecord
+  TaskRecord,
+  WorkPacerAPI
 } from '@shared/types'
 import { getDayStartMs, synthesizeDailyReportRows } from '@shared/reportFormatter'
 import { translateMain } from '@shared/i18nResources'
@@ -22,7 +26,7 @@ import { getTodayDateString } from './formatters'
 
 type Listener<T> = (payload: T) => void
 
-export function createMockBridge(): IdlePulseAPI & {
+export function createMockBridge(): WorkPacerAPI & {
   simulateReturnPopup: (minutesAway?: number) => void
 } {
   let settings: AppSettings = {
@@ -30,12 +34,53 @@ export function createMockBridge(): IdlePulseAPI & {
     stickyWidget: { ...DEFAULT_SETTINGS.stickyWidget, visible: true }
   }
 
+  let presets: QuickIdlePreset[] = [
+    {
+      id: 'preset-lunch',
+      label: 'Đi ăn trưa',
+      icon: 'utensils',
+      tag: 'eating',
+      usageCount: 5,
+      lastUsedAt: Date.now() - 3600_000,
+      createdAt: 1
+    },
+    {
+      id: 'preset-meeting',
+      label: 'Họp',
+      icon: 'users',
+      tag: 'meeting',
+      usageCount: 3,
+      lastUsedAt: Date.now() - 7200_000,
+      createdAt: 2
+    },
+    {
+      id: 'preset-short-break',
+      label: 'Nghỉ ngắn',
+      icon: 'coffee',
+      tag: 'rest',
+      usageCount: 2,
+      lastUsedAt: Date.now() - 9000_000,
+      createdAt: 3
+    }
+  ]
+
+  const sortPresets = (list: QuickIdlePreset[]): QuickIdlePreset[] =>
+    [...list].sort(
+      (a, b) =>
+        b.usageCount - a.usageCount ||
+        b.lastUsedAt - a.lastUsedAt ||
+        a.createdAt - b.createdAt
+    )
+
   const todayStr = getTodayDateString()
   const dayStart = getDayStartMs(todayStr)
   const at = (h: number, m: number): number => dayStart + (h * 60 + m) * 60 * 1000
 
   let nextSessionId = 10
   let nextTaskId = 10
+  let isPaused = false
+  let pausedAt = 0
+  let currentPresetLabel: string | null = null
 
   const sessions: SessionRecord[] = [
     {
@@ -66,8 +111,8 @@ export function createMockBridge(): IdlePulseAPI & {
       id: 3,
       type: 'active',
       startTime: at(9, 39),
-      endTime: at(10, 6),
-      durationSec: 27 * 60,
+      endTime: at(12, 0),
+      durationSec: 141 * 60,
       breakCategory: 'none',
       tag: null,
       note: '',
@@ -76,30 +121,6 @@ export function createMockBridge(): IdlePulseAPI & {
     },
     {
       id: 4,
-      type: 'auto_idle',
-      startTime: at(10, 6),
-      endTime: at(10, 14),
-      durationSec: 480,
-      breakCategory: 'short',
-      tag: 'rest',
-      note: 'Giải lao cà phê',
-      smartException: 'none',
-      isManual: false
-    },
-    {
-      id: 5,
-      type: 'active',
-      startTime: at(10, 14),
-      endTime: at(12, 0),
-      durationSec: 106 * 60,
-      breakCategory: 'none',
-      tag: null,
-      note: '',
-      smartException: 'none',
-      isManual: false
-    },
-    {
-      id: 6,
       type: 'manual_idle',
       startTime: at(12, 0),
       endTime: at(13, 0),
@@ -111,31 +132,7 @@ export function createMockBridge(): IdlePulseAPI & {
       isManual: true
     },
     {
-      id: 7,
-      type: 'active',
-      startTime: at(13, 0),
-      endTime: at(14, 20),
-      durationSec: 80 * 60,
-      breakCategory: 'none',
-      tag: null,
-      note: '',
-      smartException: 'none',
-      isManual: false
-    },
-    {
-      id: 8,
-      type: 'auto_idle',
-      startTime: at(14, 20),
-      endTime: at(14, 38),
-      durationSec: 18 * 60,
-      breakCategory: 'short',
-      tag: 'rest',
-      note: '',
-      smartException: 'none',
-      isManual: false
-    },
-    {
-      id: 9,
+      id: 5,
       type: 'active',
       startTime: Date.now() - 34 * 60 * 1000,
       endTime: null,
@@ -159,23 +156,15 @@ export function createMockBridge(): IdlePulseAPI & {
     },
     {
       id: 2,
-      title: 'Thiết kế schema SQLite & Core Idle Tracking Engine',
+      title: 'Thiết kế giao diện Liquid Glass cho WorkPacer',
       startTime: at(9, 39),
       endTime: at(12, 0),
-      durationSec: 130 * 60,
-      category: 'engineering'
+      durationSec: 141 * 60,
+      category: 'design'
     },
     {
       id: 3,
-      title: 'Xây dựng Dashboard biểu đồ Recharts & Heatmap',
-      startTime: at(13, 0),
-      endTime: at(14, 20),
-      durationSec: 80 * 60,
-      category: 'frontend'
-    },
-    {
-      id: 4,
-      title: 'Hoàn thiện trang tạo Báo cáo cuối ngày (日報)',
+      title: 'Hoàn thiện Báo cáo cuối ngày (日報)',
       startTime: Date.now() - 34 * 60 * 1000,
       endTime: null,
       durationSec: 34 * 60,
@@ -184,9 +173,9 @@ export function createMockBridge(): IdlePulseAPI & {
   ]
 
   const savedReports = new Map<string, DailyReportDocument>()
-
   const stateListeners = new Set<Listener<LiveTrackingState>>()
   const settingsListeners = new Set<Listener<AppSettings>>()
+  const presetListeners = new Set<Listener<QuickIdlePreset[]>>()
   const navListeners = new Set<Listener<MainTabId>>()
 
   let eyeCareRemainingSec = 14 * 60 + 25
@@ -204,6 +193,15 @@ export function createMockBridge(): IdlePulseAPI & {
     completedFocusCount: 3
   }
 
+  function resolveBrowserTheme(): ResolvedTheme {
+    if (settings.theme === 'dark') return 'dark'
+    if (settings.theme === 'light') return 'light'
+    return typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-color-scheme: dark)').matches
+      ? 'dark'
+      : 'light'
+  }
+
   function getCurrentOpenSession(): SessionRecord {
     return sessions[sessions.length - 1]
   }
@@ -216,25 +214,35 @@ export function createMockBridge(): IdlePulseAPI & {
     let todayActiveSec = 0
     let todayIdleSec = 0
     for (const s of sessions) {
-      const dur = s.endTime ? Math.round((s.endTime - s.startTime) / 1000) : Math.round((now - s.startTime) / 1000)
+      const dur = s.endTime
+        ? Math.round((s.endTime - s.startTime) / 1000)
+        : Math.round((now - s.startTime) / 1000)
       if (s.type === 'active') todayActiveSec += Math.max(0, dur)
       else todayIdleSec += Math.max(0, dur)
     }
 
+    const startRef = isPaused ? pausedAt : cur.startTime
+
     return {
-      status:
-        cur.type === 'manual_idle'
+      status: isPaused
+        ? 'paused'
+        : cur.type === 'manual_idle'
           ? 'manual_idle'
           : cur.type === 'auto_idle'
             ? 'auto_idle'
             : 'active',
+      resolvedTheme: resolveBrowserTheme(),
       osIdleSec: cur.type === 'active' ? 0 : Math.round((now - cur.startTime) / 1000),
-      currentSessionStart: cur.startTime,
-      currentSessionElapsedSec: Math.max(0, Math.round((now - cur.startTime) / 1000)),
-      currentManualTag: cur.tag,
+      currentSessionStart: startRef,
+      currentSessionElapsedSec: Math.max(0, Math.round((now - startRef) / 1000)),
+      currentManualTag: isPaused ? null : cur.tag,
+      currentPresetLabel: isPaused ? null : currentPresetLabel,
       currentSmartException: 'none',
       activeTask: activeTask
-        ? { ...activeTask, durationSec: Math.max(0, Math.round((now - activeTask.startTime) / 1000)) }
+        ? {
+            ...activeTask,
+            durationSec: Math.max(0, Math.round((now - activeTask.startTime) / 1000))
+          }
         : null,
       todayActiveSec,
       todayIdleSec,
@@ -260,43 +268,29 @@ export function createMockBridge(): IdlePulseAPI & {
     settingsListeners.forEach((cb) => cb(settings))
   }
 
-  setInterval(() => {
-    const cur = getCurrentOpenSession()
-    if (activeBreakOverlay) {
-      if (activeBreakOverlay.countdownSec > 1) {
-        activeBreakOverlay = {
-          ...activeBreakOverlay,
-          countdownSec: activeBreakOverlay.countdownSec - 1
-        }
-      } else {
-        activeBreakOverlay = null
-        eyeCareRemainingSec = settings.eyeCareIntervalMinutes * 60
-      }
-    } else if (cur.type === 'active') {
-      continuousActiveSec += 1
-      if (settings.eyeCareEnabled && eyeCareRemainingSec > 0) {
-        eyeCareRemainingSec -= 1
-        if (eyeCareRemainingSec === 0) {
-          activeBreakOverlay = { kind: 'eye_20_20_20', countdownSec: 20 }
-        }
-      }
-    }
+  function notifyPresets(): void {
+    presetListeners.forEach((cb) => cb(sortPresets(presets)))
+  }
 
-    if (pomodoro.running && pomodoro.remainingSec > 0) {
-      pomodoro = { ...pomodoro, remainingSec: pomodoro.remainingSec - 1 }
-      if (pomodoro.remainingSec === 0) {
-        if (pomodoro.phase === 'focus') {
-          pomodoro = {
-            ...pomodoro,
-            phase: 'break',
-            remainingSec: pomodoro.breakMinutes * 60,
-            completedFocusCount: pomodoro.completedFocusCount + 1
+  setInterval(() => {
+    if (!isPaused) {
+      const cur = getCurrentOpenSession()
+      if (activeBreakOverlay) {
+        if (activeBreakOverlay.countdownSec > 1) {
+          activeBreakOverlay = {
+            ...activeBreakOverlay,
+            countdownSec: activeBreakOverlay.countdownSec - 1
           }
         } else {
-          pomodoro = {
-            ...pomodoro,
-            phase: 'focus',
-            remainingSec: pomodoro.focusMinutes * 60
+          activeBreakOverlay = null
+          eyeCareRemainingSec = settings.eyeCareIntervalMinutes * 60
+        }
+      } else if (cur.type === 'active') {
+        continuousActiveSec += 1
+        if (settings.eyeCareEnabled && eyeCareRemainingSec > 0) {
+          eyeCareRemainingSec -= 1
+          if (eyeCareRemainingSec === 0) {
+            activeBreakOverlay = { kind: 'eye_20_20_20', countdownSec: 20 }
           }
         }
       }
@@ -308,7 +302,8 @@ export function createMockBridge(): IdlePulseAPI & {
     getInitialData: async () => ({
       state: computeState(),
       settings,
-      tasksToday: [...tasks]
+      tasksToday: [...tasks],
+      quickIdlePresets: sortPresets(presets)
     }),
     onStateUpdate: (cb) => {
       stateListeners.add(cb)
@@ -317,6 +312,10 @@ export function createMockBridge(): IdlePulseAPI & {
     onSettingsUpdate: (cb) => {
       settingsListeners.add(cb)
       return () => settingsListeners.delete(cb)
+    },
+    onPresetsUpdate: (cb) => {
+      presetListeners.add(cb)
+      return () => presetListeners.delete(cb)
     },
     onNavigateTab: (cb) => {
       navListeners.add(cb)
@@ -333,6 +332,7 @@ export function createMockBridge(): IdlePulseAPI & {
         }
       }
       notifySettings()
+      notifyState()
       return settings
     },
 
@@ -343,12 +343,14 @@ export function createMockBridge(): IdlePulseAPI & {
     },
 
     startManualIdle: async (tag: IdleTag, note = '') => {
+      isPaused = false
       const now = Date.now()
       const cur = getCurrentOpenSession()
       cur.endTime = now
       cur.durationSec = Math.max(0, Math.round((now - cur.startTime) / 1000))
       if (cur.type !== 'active') cur.breakCategory = classifyBreakDuration(cur.durationSec)
 
+      currentPresetLabel = note || null
       sessions.push({
         id: nextSessionId++,
         type: 'manual_idle',
@@ -366,8 +368,13 @@ export function createMockBridge(): IdlePulseAPI & {
 
     resumeFromIdle: async () => {
       const now = Date.now()
+      isPaused = false
+      currentPresetLabel = null
       const cur = getCurrentOpenSession()
-      if (cur.type === 'active') return
+      if (cur.type === 'active') {
+        notifyState()
+        return
+      }
       cur.endTime = now
       cur.durationSec = Math.max(0, Math.round((now - cur.startTime) / 1000))
       cur.breakCategory = classifyBreakDuration(cur.durationSec)
@@ -385,6 +392,76 @@ export function createMockBridge(): IdlePulseAPI & {
         isManual: false
       })
       notifyState()
+    },
+
+    togglePauseTracking: async () => {
+      isPaused = !isPaused
+      pausedAt = Date.now()
+      notifyState()
+    },
+
+    getQuickIdlePresets: async () => sortPresets(presets),
+
+    createQuickIdlePreset: async (input) => {
+      if (presets.length >= MAX_QUICK_IDLE_PRESETS) {
+        throw new Error(`MAX_QUICK_IDLE_PRESETS_EXCEEDED (${MAX_QUICK_IDLE_PRESETS})`)
+      }
+      presets = [
+        ...presets,
+        {
+          id: `preset-${Date.now()}`,
+          label: input.label.trim(),
+          icon: input.icon,
+          tag: input.tag,
+          usageCount: 0,
+          lastUsedAt: 0,
+          createdAt: Date.now()
+        }
+      ]
+      notifyPresets()
+      return sortPresets(presets)
+    },
+
+    updateQuickIdlePreset: async (id, updates) => {
+      presets = presets.map((p) => (p.id === id ? { ...p, ...updates } : p))
+      notifyPresets()
+      return sortPresets(presets)
+    },
+
+    deleteQuickIdlePreset: async (id) => {
+      presets = presets.filter((p) => p.id !== id)
+      notifyPresets()
+      return sortPresets(presets)
+    },
+
+    triggerQuickIdlePreset: async (id) => {
+      const now = Date.now()
+      presets = presets.map((p) =>
+        p.id === id ? { ...p, usageCount: p.usageCount + 1, lastUsedAt: now } : p
+      )
+      const target = presets.find((p) => p.id === id)
+      if (target) {
+        isPaused = false
+        currentPresetLabel = target.label
+        const cur = getCurrentOpenSession()
+        cur.endTime = now
+        cur.durationSec = Math.max(0, Math.round((now - cur.startTime) / 1000))
+        sessions.push({
+          id: nextSessionId++,
+          type: 'manual_idle',
+          startTime: now,
+          endTime: null,
+          durationSec: 0,
+          breakCategory: 'none',
+          tag: target.tag,
+          note: target.label,
+          smartException: 'none',
+          isManual: true
+        })
+      }
+      notifyPresets()
+      notifyState()
+      return sortPresets(presets)
     },
 
     simulateReturnPopup: (minutesAway = 12) => {
@@ -452,7 +529,11 @@ export function createMockBridge(): IdlePulseAPI & {
       const now = Date.now()
       tasks = tasks.map((t) =>
         t.endTime === null
-          ? { ...t, endTime: now, durationSec: Math.max(0, Math.round((now - t.startTime) / 1000)) }
+          ? {
+              ...t,
+              endTime: now,
+              durationSec: Math.max(0, Math.round((now - t.startTime) / 1000))
+            }
           : t
       )
       notifyState()
@@ -473,9 +554,17 @@ export function createMockBridge(): IdlePulseAPI & {
     startPomodoro: async (preset?: PomodoroPreset, customFocus?: number, customBreak?: number) => {
       const nextPreset = preset ?? pomodoro.preset
       const focusMinutes =
-        nextPreset === '25_5' ? 25 : nextPreset === '50_10' ? 50 : customFocus ?? pomodoro.focusMinutes
+        nextPreset === '25_5'
+          ? 25
+          : nextPreset === '50_10'
+            ? 50
+            : (customFocus ?? pomodoro.focusMinutes)
       const breakMinutes =
-        nextPreset === '25_5' ? 5 : nextPreset === '50_10' ? 10 : customBreak ?? pomodoro.breakMinutes
+        nextPreset === '25_5'
+          ? 5
+          : nextPreset === '50_10'
+            ? 10
+            : (customBreak ?? pomodoro.breakMinutes)
       const resuming = !preset && pomodoro.phase !== 'idle' && !pomodoro.running
       pomodoro = {
         ...pomodoro,
@@ -566,7 +655,11 @@ export function createMockBridge(): IdlePulseAPI & {
           ? Array.from({ length: 12 }, (_, idx) => {
               const hr = 8 + idx
               const activeMin =
-                hr === 12 ? 0 : hr >= 8 && hr <= 16 ? [54, 48, 52, 46, 0, 50, 38, 52, 44][hr - 8] ?? 20 : 0
+                hr === 12
+                  ? 0
+                  : hr >= 8 && hr <= 16
+                    ? ([54, 48, 52, 46, 0, 50, 38, 52, 44][hr - 8] ?? 20)
+                    : 0
               const idleMin =
                 hr === 12 ? 60 : hr === 14 ? 22 : hr >= 8 && hr <= 16 ? 60 - activeMin : 0
               return {
@@ -578,45 +671,27 @@ export function createMockBridge(): IdlePulseAPI & {
                 longMin: idleMin > 30 ? idleMin : 0
               }
             })
-          : range === 'day'
-            ? [
-                { label: '11/20', activeMin: 385, idleMin: 82, microMin: 12, shortMin: 25, longMin: 45 },
-                { label: '11/21', activeMin: 410, idleMin: 74, microMin: 14, shortMin: 20, longMin: 40 },
-                { label: '11/22', activeMin: 140, idleMin: 45, microMin: 10, shortMin: 35, longMin: 0 },
-                { label: '11/23', activeMin: 95, idleMin: 30, microMin: 10, shortMin: 20, longMin: 0 },
-                { label: '11/24', activeMin: 425, idleMin: 78, microMin: 13, shortMin: 20, longMin: 45 },
-                { label: '11/25', activeMin: 398, idleMin: 91, microMin: 16, shortMin: 30, longMin: 45 },
-                {
-                  label: '11/26',
-                  activeMin: Math.round(st.todayActiveSec / 60),
-                  idleMin: Math.round(st.todayIdleSec / 60),
-                  microMin: 3,
-                  shortMin: 26,
-                  longMin: 60
-                }
-              ]
-            : [
-                { label: '10/19~', activeMin: 1980, idleMin: 420, microMin: 65, shortMin: 135, longMin: 220 },
-                { label: '10/26~', activeMin: 2120, idleMin: 390, microMin: 60, shortMin: 120, longMin: 210 },
-                { label: '11/02~', activeMin: 2050, idleMin: 445, microMin: 70, shortMin: 145, longMin: 230 },
-                { label: '11/09~', activeMin: 2190, idleMin: 380, microMin: 55, shortMin: 115, longMin: 210 },
-                { label: '11/16~', activeMin: 2085, idleMin: 410, microMin: 62, shortMin: 128, longMin: 220 },
-                { label: '11/23~', activeMin: 1640, idleMin: 330, microMin: 48, shortMin: 102, longMin: 180 }
-              ]
+          : [
+              { label: '11/24', activeMin: 425, idleMin: 78, microMin: 13, shortMin: 20, longMin: 45 },
+              { label: '11/25', activeMin: 398, idleMin: 91, microMin: 16, shortMin: 30, longMin: 45 },
+              {
+                label: '11/26',
+                activeMin: Math.round(st.todayActiveSec / 60),
+                idleMin: Math.round(st.todayIdleSec / 60),
+                microMin: 3,
+                shortMin: 26,
+                longMin: 60
+              }
+            ]
 
       const heatmap: HeatmapCell[] = []
       for (let dow = 0; dow < 7; dow++) {
         for (let hr = 0; hr < 24; hr++) {
-          let mins = 0
-          if (dow >= 1 && dow <= 5) {
-            if (hr === 12) mins = 54
-            else if (hr === 14) mins = 21
-            else if (hr === 10 || hr === 16) mins = 11
-            else if (hr >= 9 && hr <= 17) mins = 5
-          } else if (hr >= 11 && hr <= 15) {
-            mins = 14
-          }
-          heatmap.push({ dayOfWeek: dow, hour: hr, idleMinutes: mins })
+          heatmap.push({
+            dayOfWeek: dow,
+            hour: hr,
+            idleMinutes: dow >= 1 && dow <= 5 && hr === 12 ? 52 : hr === 14 ? 19 : 0
+          })
         }
       }
 
@@ -626,57 +701,27 @@ export function createMockBridge(): IdlePulseAPI & {
         todayActiveSec: st.todayActiveSec,
         todayIdleSec: st.todayIdleSec,
         activeRatioPercent: ratio,
-        breakBreakdown: {
-          microSec: 180,
-          shortSec: 26 * 60,
-          longSec: 60 * 60
-        },
+        breakBreakdown: { microSec: 180, shortSec: 26 * 60, longSec: 3600 },
         intradaySessions: [...sessions],
         heatmap,
         topIdleHours: [
           { hour: 12, label: '12:00–13:00', totalIdleMin: 540, avgIdleMin: 54, percentage: 100 },
-          { hour: 14, label: '14:00–15:00', totalIdleMin: 215, avgIdleMin: 22, percentage: 40 },
-          { hour: 16, label: '16:00–17:00', totalIdleMin: 132, avgIdleMin: 13, percentage: 24 },
-          { hour: 10, label: '10:00–11:00', totalIdleMin: 110, avgIdleMin: 11, percentage: 20 }
+          { hour: 14, label: '14:00–15:00', totalIdleMin: 215, avgIdleMin: 22, percentage: 40 }
         ]
       }
     },
 
     exportData: async (format, startDate, endDate) => {
-      const data =
-        format === 'json'
-          ? JSON.stringify({ startDate, endDate, sessions, tasks }, null, 2)
-          : '\uFEFFRecordType,ID,Type,Start,End,DurationSec,Note\n' +
-            sessions
-              .map(
-                (s) =>
-                  `session,${s.id},${s.type},${new Date(s.startTime).toISOString()},${s.endTime ? new Date(s.endTime).toISOString() : ''},${s.durationSec},"${s.note}"`
-              )
-              .join('\n')
-
-      const blob = new Blob([data], {
-        type: format === 'csv' ? 'text/csv;charset=utf-8;' : 'application/json'
-      })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `IdlePulse_${startDate}_to_${endDate}.${format}`
-      a.click()
-      URL.revokeObjectURL(url)
+      const data = JSON.stringify({ app: 'WorkPacer', startDate, endDate, sessions, tasks }, null, 2)
       return {
         success: true,
-        filePath: `IdlePulse_${startDate}_to_${endDate}.${format}`,
+        filePath: `WorkPacer_${startDate}_to_${endDate}.${format}`,
+        content: data,
         rowCount: sessions.length + tasks.length
       }
     },
 
-    sendSummaryNotificationNow: async () => {
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(translateMain(settings.language, 'notifications.dailySummaryTitle'), {
-          body: 'Active: 5h 07m | Idle: 1h 29m (78%)'
-        })
-      }
-    },
+    sendSummaryNotificationNow: async () => {},
 
     getDailyReport: async (dateStr, forceRegenerate) => {
       const existing = savedReports.get(dateStr)

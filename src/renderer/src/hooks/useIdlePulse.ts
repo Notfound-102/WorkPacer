@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react'
-import { AppSettings, DEFAULT_SETTINGS, LiveTrackingState, MainTabId, TaskRecord } from '@shared/types'
+import {
+  AppSettings,
+  DEFAULT_SETTINGS,
+  LiveTrackingState,
+  MainTabId,
+  QuickIdlePreset,
+  ResolvedTheme,
+  TaskRecord,
+  ThemeMode
+} from '@shared/types'
 import { bridge } from '../lib/bridge'
 import i18n from '../i18n'
 
@@ -7,6 +16,7 @@ export function useIdlePulse() {
   const [state, setState] = useState<LiveTrackingState | null>(null)
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
   const [tasksToday, setTasksToday] = useState<TaskRecord[]>([])
+  const [quickIdlePresets, setQuickIdlePresets] = useState<QuickIdlePreset[]>([])
   const [activeTab, setActiveTab] = useState<MainTabId>('dashboard')
 
   useEffect(() => {
@@ -17,10 +27,15 @@ export function useIdlePulse() {
       setState(init.state)
       setSettings(init.settings)
       setTasksToday(init.tasksToday)
+      setQuickIdlePresets(init.quickIdlePresets)
       if (i18n.language !== init.settings.language) {
         void i18n.changeLanguage(init.settings.language)
       }
-      applyThemeClass(init.settings.theme)
+      applyAppearanceClasses(
+        init.settings.theme,
+        init.state.resolvedTheme,
+        init.settings.reduceTransparency
+      )
     })
 
     const unsubState = bridge.onStateUpdate((nextState) => {
@@ -34,7 +49,11 @@ export function useIdlePulse() {
       if (i18n.language !== nextSettings.language) {
         void i18n.changeLanguage(nextSettings.language)
       }
-      applyThemeClass(nextSettings.theme)
+    })
+
+    const unsubPresets = bridge.onPresetsUpdate((nextPresets) => {
+      if (!mounted) return
+      setQuickIdlePresets(nextPresets)
     })
 
     const unsubNav = bridge.onNavigateTab((tab) => {
@@ -46,9 +65,18 @@ export function useIdlePulse() {
       mounted = false
       unsubState()
       unsubSettings()
+      unsubPresets()
       unsubNav()
     }
   }, [])
+
+  useEffect(() => {
+    applyAppearanceClasses(
+      settings.theme,
+      state?.resolvedTheme,
+      settings.reduceTransparency
+    )
+  }, [settings.theme, settings.reduceTransparency, state?.resolvedTheme])
 
   const refreshTasks = async (dateStr: string): Promise<void> => {
     const list = await bridge.getTasksByDate(dateStr)
@@ -59,17 +87,28 @@ export function useIdlePulse() {
     state,
     settings,
     tasksToday,
+    quickIdlePresets,
     activeTab,
     setActiveTab,
     refreshTasks
   }
 }
 
-function applyThemeClass(theme: 'light' | 'dark'): void {
+function applyAppearanceClasses(
+  theme: ThemeMode,
+  resolvedFromMain: ResolvedTheme | undefined,
+  reduceTransparency: boolean
+): void {
   const root = document.documentElement
-  if (theme === 'dark') {
-    root.classList.add('dark')
-  } else {
-    root.classList.remove('dark')
-  }
+  const isDark =
+    theme === 'dark'
+      ? true
+      : theme === 'light'
+        ? false
+        : resolvedFromMain
+          ? resolvedFromMain === 'dark'
+          : window.matchMedia?.('(prefers-color-scheme: dark)').matches
+
+  root.classList.toggle('dark', Boolean(isDark))
+  root.classList.toggle('reduce-transparency', Boolean(reduceTransparency))
 }

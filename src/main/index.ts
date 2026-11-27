@@ -1,7 +1,7 @@
-import { join } from 'path'
 import { writeFile } from 'fs/promises'
-import { app, dialog, ipcMain, Notification, powerMonitor } from 'electron'
+import { app, dialog, ipcMain, nativeTheme, Notification, powerMonitor } from 'electron'
 import { formatLocalDate, IdlePulseDatabase } from './database'
+import { migrateLegacyDatabaseIfNeeded } from './dataMigration'
 import { detectSmartException } from './smartExceptions'
 import { IdleTrackingEngine } from './idleTracker'
 import { WindowManager } from './windowManager'
@@ -16,6 +16,7 @@ import {
   LanguageCode,
   MainTabId,
   PomodoroPreset,
+  QuickPresetIcon,
   StickyWidgetPrefs
 } from '../shared/types'
 
@@ -30,11 +31,7 @@ function formatSecShort(sec: number): string {
   return h > 0 ? `${h}h ${m}m` : `${m}m`
 }
 
-function showLocalizedNotification(
-  title: string,
-  body: string,
-  onClick?: () => void
-): void {
+function showLocalizedNotification(title: string, body: string, onClick?: () => void): void {
   if (!Notification.isSupported()) return
   const notif = new Notification({ title, body })
   if (onClick) {
@@ -71,12 +68,12 @@ function dispatchTrackerNotification(event: any): void {
     sendSummaryNotification('weekly')
   } else if (event.type === 'pomodoro_break') {
     showLocalizedNotification(
-      `IdlePulse • ${translateMain(lang, 'status.pomodoro_break')}`,
+      `WorkPacer • ${translateMain(lang, 'status.pomodoro_break')}`,
       translateMain(lang, 'tasks.completedCycles', { count: event.count })
     )
   } else if (event.type === 'pomodoro_focus') {
     showLocalizedNotification(
-      `IdlePulse • ${translateMain(lang, 'status.pomodoro_focus')}`,
+      `WorkPacer • ${translateMain(lang, 'status.pomodoro_focus')}`,
       translateMain(lang, 'status.active')
     )
   }
@@ -104,7 +101,8 @@ function sendSummaryNotification(period: 'daily' | 'weekly'): void {
     const analytics = db.getAnalytics('day')
     const activeMin = analytics.chartPoints.reduce((acc, p) => acc + p.activeMin, 0)
     const idleMin = analytics.chartPoints.reduce((acc, p) => acc + p.idleMin, 0)
-    const ratio = activeMin + idleMin > 0 ? Math.round((activeMin / (activeMin + idleMin)) * 100) : 0
+    const ratio =
+      activeMin + idleMin > 0 ? Math.round((activeMin / (activeMin + idleMin)) * 100) : 0
     showLocalizedNotification(
       translateMain(lang, 'notifications.weeklySummaryTitle'),
       translateMain(lang, 'notifications.weeklySummaryBody', {
@@ -153,6 +151,13 @@ function buildDailyReport(dateStr: string, forceRegenerate = false): DailyReport
   })
 }
 
+function syncPresetsEverywhere(): void {
+  if (!db || !windows || !tracker) return
+  const presets = db.getQuickIdlePresets()
+  windows.broadcast('presets:updated', presets)
+  tray?.refresh(db.getSettings(), tracker.getLiveState(), presets, true)
+}
+
 function registerIpcHandlers(): void {
   ipcMain.handle('app:getInitialData', () => {
     if (!db || !tracker) throw new Error('Engine not initialized')
@@ -160,16 +165,19 @@ function registerIpcHandlers(): void {
     return {
       state: tracker.getLiveState(),
       settings: db.getSettings(),
-      tasksToday: db.getTasksByDate(todayStr)
+      tasksToday: db.getTasksByDate(todayStr),
+      quickIdlePresets: db.getQuickIdlePresets()
     }
   })
 
   ipcMain.handle('settings:update', (_e, partial: Partial<AppSettings>) => {
     if (!db || !windows || !tracker) throw new Error('Engine not initialized')
     const updated = db.updateSettings(partial)
+    windows.syncNativeTheme(updated.theme)
     windows.syncStickyWidgetWindow(updated.stickyWidget)
     windows.broadcast('settings:updated', updated)
-    tray?.refresh(updated, tracker.getLiveState(), true)
+    tracker.emitState()
+    tray?.refresh(updated, tracker.getLiveState(), db.getQuickIdlePresets(), true)
     return updated
   })
 
@@ -177,10 +185,11 @@ function registerIpcHandlers(): void {
     if (!db || !windows || !tracker) throw new Error('Engine not initialized')
     const updated = db.updateSettings({ language: lang })
     windows.broadcast('settings:updated', updated)
-    tray?.refresh(updated, tracker.getLiveState(), true)
+    tray?.refresh(updated, tracker.getLiveState(), db.getQuickIdlePresets(), true)
     return updated
   })
 
+  // Manual Idle, Pause & Quick Idle Presets
   ipcMain.handle('tracking:startManualIdle', (_e, tag: IdleTag, note?: string) => {
     tracker?.startManualIdle(tag, note)
   })
@@ -189,6 +198,49 @@ function registerIpcHandlers(): void {
     tracker?.resumeFromIdle()
   })
 
+  ipcMain.handle('tracking:togglePause', () => {
+    tracker?.togglePauseTracking()
+  })
+
+  ipcMain.handle('presets:get', () => {
+    return db?.getQuickIdlePresets() ?? []
+  })
+
+  ipcMain.handle(
+    'presets:create',
+    (_e, input: { label: string; icon: QuickPresetIcon; tag: IdleTag }) => {
+      if (!db) throw new Error('Database not initialized')
+      const presets = db.createQuickIdlePreset(input)
+      syncPresetsEverywhere()
+      return presets
+    }
+  )
+
+  ipcMain.handle(
+    'presets:update',
+    (_e, id: string, updates: Partial<{ label: string; icon: QuickPresetIcon; tag: IdleTag }>) => {
+      if (!db) throw new Error('Database not initialized')
+      const presets = db.updateQuickIdlePreset(id, updates)
+      syncPresetsEverywhere()
+      return presets
+    }
+  )
+
+  ipcMain.handle('presets:delete', (_e, id: string) => {
+    if (!db) throw new Error('Database not initialized')
+    const presets = db.deleteQuickIdlePreset(id)
+    syncPresetsEverywhere()
+    return presets
+  })
+
+  ipcMain.handle('presets:trigger', (_e, id: string) => {
+    if (!tracker) throw new Error('Tracker not initialized')
+    const presets = tracker.triggerQuickIdlePreset(id)
+    syncPresetsEverywhere()
+    return presets
+  })
+
+  // Return Popup
   ipcMain.handle(
     'tracking:submitReturnTag',
     (_e, sessionId: number, tag: IdleTag | null, note?: string) => {
@@ -258,7 +310,7 @@ function registerIpcHandlers(): void {
     })
     windows.syncStickyWidgetWindow(updated.stickyWidget)
     windows.broadcast('settings:updated', updated)
-    tray?.refresh(updated, tracker.getLiveState(), true)
+    tray?.refresh(updated, tracker.getLiveState(), db.getQuickIdlePresets(), true)
     return updated
   })
 
@@ -270,7 +322,7 @@ function registerIpcHandlers(): void {
     })
     windows.syncStickyWidgetWindow(updated.stickyWidget)
     windows.broadcast('settings:updated', updated)
-    tray?.refresh(updated, tracker.getLiveState(), true)
+    tray?.refresh(updated, tracker.getLiveState(), db.getQuickIdlePresets(), true)
     return updated
   })
 
@@ -289,9 +341,9 @@ function registerIpcHandlers(): void {
     async (_e, format: 'csv' | 'json', startDate: string, endDate: string) => {
       if (!db) throw new Error('Database not initialized')
       const { content, rowCount } = db.exportHistory(format, startDate, endDate)
-      const defaultFile = `IdlePulse_${startDate}_to_${endDate}.${format}`
+      const defaultFile = `WorkPacer_${startDate}_to_${endDate}.${format}`
       const result = await dialog.showSaveDialog({
-        title: 'Export IdlePulse History',
+        title: 'Export WorkPacer History',
         defaultPath: defaultFile,
         filters: [
           format === 'csv'
@@ -322,7 +374,10 @@ function registerIpcHandlers(): void {
   })
 }
 
-app.setName('IdlePulse')
+app.setName('WorkPacer')
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.workpacer.app')
+}
 
 const gotSingleLock = app.requestSingleInstanceLock()
 if (!gotSingleLock) {
@@ -333,14 +388,30 @@ if (!gotSingleLock) {
   })
 
   app.whenReady().then(() => {
-    const dbPath = join(app.getPath('userData'), 'idlepulse.sqlite')
+    const { dbPath } = migrateLegacyDatabaseIfNeeded({
+      appDataDir: app.getPath('appData'),
+      newUserDataDir: app.getPath('userData')
+    })
+
     db = new IdlePulseDatabase(dbPath)
     windows = new WindowManager(db)
+
+    const initialSettings = db.getSettings()
+    windows.syncNativeTheme(initialSettings.theme)
 
     tracker = new IdleTrackingEngine({
       db,
       getSystemIdleTime: () => powerMonitor.getSystemIdleTime(),
-      detectSmartException
+      detectSmartException,
+      getResolvedTheme: () => windows?.resolveTheme() ?? 'light'
+    })
+
+    nativeTheme.on('updated', () => {
+      if (!db || !windows || !tracker) return
+      const s = db.getSettings()
+      const resolved = windows.resolveTheme(s.theme)
+      windows.applyThemeToOpenWindows(resolved)
+      tracker.emitState()
     })
 
     tray = new TrayManager({
@@ -354,15 +425,19 @@ if (!gotSingleLock) {
         })
         windows.syncStickyWidgetWindow(updated.stickyWidget)
         windows.broadcast('settings:updated', updated)
-        tray?.refresh(updated, tracker.getLiveState(), true)
+        tray?.refresh(updated, tracker.getLiveState(), db.getQuickIdlePresets(), true)
       },
-      onManualIdle: (tag) => tracker?.startManualIdle(tag),
+      onTriggerPreset: (presetId) => {
+        tracker?.triggerQuickIdlePreset(presetId)
+        syncPresetsEverywhere()
+      },
+      onTogglePause: () => tracker?.togglePauseTracking(),
       onResumeWork: () => tracker?.resumeFromIdle(),
       onChangeLanguage: (lang) => {
         if (!db || !windows || !tracker) return
         const updated = db.updateSettings({ language: lang })
         windows.broadcast('settings:updated', updated)
-        tray?.refresh(updated, tracker.getLiveState(), true)
+        tray?.refresh(updated, tracker.getLiveState(), db.getQuickIdlePresets(), true)
       },
       onQuit: () => {
         windows?.setQuitting(true)
@@ -372,7 +447,7 @@ if (!gotSingleLock) {
     tracker.on('state', (state) => {
       windows?.broadcast('tracking:state', state)
       if (db) {
-        tray?.refresh(db.getSettings(), state)
+        tray?.refresh(db.getSettings(), state, db.getQuickIdlePresets())
       }
     })
 
@@ -396,7 +471,6 @@ if (!gotSingleLock) {
       dispatchTrackerNotification(evt)
     })
 
-    // OS Power & Screen Lock Lifecycle Listeners
     powerMonitor.on('suspend', () => tracker?.handleSystemSuspendOrLock('suspend'))
     powerMonitor.on('lock-screen', () => tracker?.handleSystemSuspendOrLock('lock-screen'))
     powerMonitor.on('resume', () => tracker?.handleSystemResumeOrUnlock())
@@ -408,8 +482,7 @@ if (!gotSingleLock) {
 
     registerIpcHandlers()
 
-    const initialSettings = db.getSettings()
-    tray.init(initialSettings, tracker.getLiveState())
+    tray.init(initialSettings, tracker.getLiveState(), db.getQuickIdlePresets())
     windows.createOrShowMainWindow()
     if (initialSettings.stickyWidget.visible) {
       windows.syncStickyWidgetWindow(initialSettings.stickyWidget)
@@ -417,13 +490,12 @@ if (!gotSingleLock) {
 
     tracker.start()
 
-    // Smoke-test helper flag for automated CI/headless verification
-    if (process.env.IDLEPULSE_SMOKE_TEST === '1') {
+    if (process.env.WORKPACER_SMOKE_TEST === '1' || process.env.IDLEPULSE_SMOKE_TEST === '1') {
       setTimeout(() => {
-        console.log('IDLEPULSE_SMOKE_READY')
+        console.log('WORKPACER_SMOKE_READY')
         windows?.setQuitting(true)
         app.quit()
-      }, 2500)
+      }, 2200)
     }
 
     app.on('activate', () => {

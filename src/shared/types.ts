@@ -1,5 +1,6 @@
 export type LanguageCode = 'en' | 'vi' | 'ja'
-export type ThemeMode = 'light' | 'dark'
+export type ThemeMode = 'light' | 'dark' | 'system'
+export type ResolvedTheme = 'light' | 'dark'
 
 export type SessionType = 'active' | 'auto_idle' | 'manual_idle' | 'system_offline'
 export type BreakCategory = 'none' | 'micro' | 'short' | 'long'
@@ -7,6 +8,29 @@ export type IdleTag = 'eating' | 'rest' | 'meeting' | 'out' | 'sleep' | 'other'
 
 export type SmartExceptionMode = 'ignore' | 'flag' | 'off'
 export type SmartExceptionReason = 'none' | 'fullscreen_media' | 'call_active'
+
+export type QuickPresetIcon =
+  | 'utensils'
+  | 'users'
+  | 'coffee'
+  | 'footprints'
+  | 'moon'
+  | 'phone'
+  | 'book'
+  | 'dumbbell'
+  | 'sparkles'
+
+export const MAX_QUICK_IDLE_PRESETS = 6
+
+export interface QuickIdlePreset {
+  id: string
+  label: string
+  icon: QuickPresetIcon
+  tag: IdleTag
+  usageCount: number
+  lastUsedAt: number
+  createdAt: number
+}
 
 export interface SessionRecord {
   id: number
@@ -57,11 +81,21 @@ export interface StickyWidgetPrefs {
   opacity: number
   x?: number
   y?: number
+  width?: number
+  height?: number
+}
+
+export interface WindowBoundsPrefs {
+  x?: number
+  y?: number
+  width?: number
+  height?: number
 }
 
 export interface AppSettings {
   language: LanguageCode
   theme: ThemeMode
+  reduceTransparency: boolean
   userName: string
   shiftStart: string // "08:30"
   shiftEnd: string // "17:30"
@@ -84,6 +118,7 @@ export interface AppSettings {
   weeklySummaryNotification: boolean
   endOfShiftNotification: boolean
   stickyWidget: StickyWidgetPrefs
+  returnPopupBounds?: WindowBoundsPrefs
 }
 
 export interface PendingReturnPopup {
@@ -99,11 +134,13 @@ export interface ActiveBreakOverlay {
 }
 
 export interface LiveTrackingState {
-  status: 'active' | 'auto_idle' | 'manual_idle'
+  status: 'active' | 'auto_idle' | 'manual_idle' | 'paused'
+  resolvedTheme: ResolvedTheme
   osIdleSec: number
   currentSessionStart: number
   currentSessionElapsedSec: number
   currentManualTag: IdleTag | null
+  currentPresetLabel: string | null
   currentSmartException: SmartExceptionReason
   activeTask: TaskRecord | null
   todayActiveSec: number
@@ -179,23 +216,40 @@ export interface ExportResult {
   rowCount: number
 }
 
-export interface IdlePulseAPI {
+export interface WorkPacerAPI {
   getInitialData: () => Promise<{
     state: LiveTrackingState
     settings: AppSettings
     tasksToday: TaskRecord[]
+    quickIdlePresets: QuickIdlePreset[]
   }>
   onStateUpdate: (cb: (state: LiveTrackingState) => void) => () => void
   onSettingsUpdate: (cb: (settings: AppSettings) => void) => () => void
+  onPresetsUpdate: (cb: (presets: QuickIdlePreset[]) => void) => () => void
   onNavigateTab: (cb: (tab: MainTabId) => void) => () => void
 
   // Settings & Language
   updateSettings: (partial: Partial<AppSettings>) => Promise<AppSettings>
   setLanguage: (lang: LanguageCode) => Promise<AppSettings>
 
-  // Manual Idle & Return Popup
+  // Manual Idle, Pause & Quick Idle Presets (Max 6, sorted by usage frequency)
   startManualIdle: (tag: IdleTag, note?: string) => Promise<void>
   resumeFromIdle: () => Promise<void>
+  togglePauseTracking: () => Promise<void>
+  getQuickIdlePresets: () => Promise<QuickIdlePreset[]>
+  createQuickIdlePreset: (input: {
+    label: string
+    icon: QuickPresetIcon
+    tag: IdleTag
+  }) => Promise<QuickIdlePreset[]>
+  updateQuickIdlePreset: (
+    id: string,
+    updates: Partial<{ label: string; icon: QuickPresetIcon; tag: IdleTag }>
+  ) => Promise<QuickIdlePreset[]>
+  deleteQuickIdlePreset: (id: string) => Promise<QuickIdlePreset[]>
+  triggerQuickIdlePreset: (id: string) => Promise<QuickIdlePreset[]>
+
+  // Return Popup
   submitReturnTag: (sessionId: number, tag: IdleTag | null, note?: string) => Promise<void>
   dismissReturnPopup: () => Promise<void>
 
@@ -203,11 +257,18 @@ export interface IdlePulseAPI {
   startTask: (title: string, category?: string) => Promise<TaskRecord>
   stopActiveTask: () => Promise<void>
   getTasksByDate: (dateStr: string) => Promise<TaskRecord[]>
-  updateTask: (id: number, updates: Partial<Pick<TaskRecord, 'title' | 'startTime' | 'endTime'>>) => Promise<void>
+  updateTask: (
+    id: number,
+    updates: Partial<Pick<TaskRecord, 'title' | 'startTime' | 'endTime'>>
+  ) => Promise<void>
   deleteTask: (id: number) => Promise<void>
 
   // Pomodoro
-  startPomodoro: (preset?: PomodoroPreset, customFocus?: number, customBreak?: number) => Promise<void>
+  startPomodoro: (
+    preset?: PomodoroPreset,
+    customFocus?: number,
+    customBreak?: number
+  ) => Promise<void>
   pausePomodoro: () => Promise<void>
   resetPomodoro: () => Promise<void>
   skipPomodoroPhase: () => Promise<void>
@@ -216,7 +277,7 @@ export interface IdlePulseAPI {
   triggerEyeBreakNow: () => Promise<void>
   dismissBreakOverlay: (snoozeMinutes?: number) => Promise<void>
 
-  // Sticky Widget
+  // Sticky Widget & Window Controls
   toggleStickyWidget: (visible?: boolean) => Promise<AppSettings>
   updateStickyWidgetPrefs: (prefs: Partial<StickyWidgetPrefs>) => Promise<AppSettings>
   openMainWindow: (tab?: MainTabId) => Promise<void>
@@ -231,9 +292,12 @@ export interface IdlePulseAPI {
   saveDailyReport: (doc: DailyReportDocument) => Promise<DailyReportDocument>
 }
 
+export type IdlePulseAPI = WorkPacerAPI
+
 export const DEFAULT_SETTINGS: AppSettings = {
   language: 'vi',
   theme: 'light',
+  reduceTransparency: false,
   userName: 'Nguyen Van A',
   shiftStart: '08:30',
   shiftEnd: '17:30',
@@ -259,7 +323,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
     visible: false,
     alwaysOnTop: true,
     collapsed: false,
-    opacity: 0.96
+    opacity: 0.88,
+    width: 332,
+    height: 304
   }
 }
 

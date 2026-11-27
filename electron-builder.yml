@@ -1,19 +1,23 @@
-appId: com.idlepulse.desktop
-productName: IdlePulse
+appId: com.workpacer.app
+productName: WorkPacer
 directories:
-  buildResources: resources
+  buildResources: build
   output: dist
 files:
   - "!**/.vscode/*"
   - "!src/*"
+  - "!scripts/*"
   - "!electron.vite.config.{js,ts,mjs,cjs}"
-  - "!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}"
-  - "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}"
+  - "!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md,DEV_EDIT_GUIDE.md}"
+  - "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json,vitest.config.ts,vite.web.config.ts}"
   - "!tests/*"
+  - "resources/**/*"
+  - "build/icon.*"
 asarUnpack:
   - "**/*.node"
 win:
-  executableName: IdlePulse
+  icon: build/icon.ico
+  executableName: WorkPacer
   target:
     - target: nsis
       arch:
@@ -23,11 +27,19 @@ win:
       arch:
         - x64
 nsis:
-  artifactName: ${name}-${version}-setup.${ext}
+  artifactName: WorkPacer-${version}-Setup-${arch}.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
+  createStartMenuShortcut: true
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
+portable:
+  artifactName: WorkPacer-${version}-Portable-${arch}.${ext}
 mac:
+  icon: build/icon.icns
+  artifactName: WorkPacer-${version}-${arch}.${ext}
   category: public.app-category.productivity
   hardenedRuntime: true
   gatekeeperAssess: false
@@ -41,11 +53,13 @@ mac:
         - x64
         - arm64
   extendInfo:
-    NSMicrophoneUsageDescription: IdlePulse checks active call status to avoid false idle detection during meetings.
+    NSMicrophoneUsageDescription: WorkPacer checks active call status to avoid false idle detection during meetings.
 linux:
+  icon: build/icon.png
+  artifactName: WorkPacer-${version}-${arch}.${ext}
   target:
     - AppImage
     - deb
-  maintainer: IdlePulse Team
+  maintainer: WorkPacer Team
   category: Utility
 npmRebuild: true

@@ -1,104 +1,211 @@
 import { app, Menu, nativeImage, Tray } from 'electron'
-import { AppSettings, LanguageCode, LiveTrackingState } from '../shared/types'
+import {
+  AppSettings,
+  LanguageCode,
+  LiveTrackingState,
+  QuickIdlePreset
+} from '../shared/types'
 import { translateMain } from '../shared/i18nResources'
+
+export type TrayVisualStatus = 'active' | 'idle' | 'pomodoro' | 'paused'
 
 export interface TrayActions {
   onOpenMain: () => void
   onOpenDailyReport: () => void
   onToggleWidget: () => void
-  onManualIdle: (tag: 'eating' | 'meeting' | 'rest') => void
+  onTriggerPreset: (presetId: string) => void
+  onTogglePause: () => void
   onResumeWork: () => void
   onChangeLanguage: (lang: LanguageCode) => void
   onQuit: () => void
 }
 
-/**
- * Generates a clean 16x16 RGBA circle icon dynamically so System Tray never breaks
- * across Windows, macOS, or Linux environments.
- */
-function createStatusTrayIcon(status: 'active' | 'idle' | 'pomodoro'): Electron.NativeImage {
-  const size = 16
-  const buf = Buffer.alloc(size * size * 4)
-  // BGRA on little-endian / RGBA buffer for createFromBitmap
-  const colors = {
-    active: { r: 16, g: 185, b: 129 }, // Emerald/Teal
-    idle: { r: 245, g: 158, b: 11 }, // Amber
-    pomodoro: { r: 244, g: 63, b: 94 } // Coral/Rose
-  }[status]
+function clamp(v: number, lo = 0, hi = 1): number {
+  return v < lo ? lo : v > hi ? hi : v
+}
 
-  const center = (size - 1) / 2
+function smoothstep(e0: number, e1: number, x: number): number {
+  const t = clamp((x - e0) / (e1 - e0))
+  return t * t * (3 - 2 * t)
+}
+
+function sdSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const pax = px - ax
+  const pay = py - ay
+  const bax = bx - ax
+  const bay = by - ay
+  const h = clamp((pax * bax + pay * bay) / (bax * bax + bay * bay))
+  return Math.hypot(pax - bax * h, pay - bay * h)
+}
+
+function renderTrayBitmapBGRA(size: number, status: TrayVisualStatus): Buffer {
+  const buf = Buffer.alloc(size * size * 4)
+  const badgeColors: Record<TrayVisualStatus, { r: number; g: number; b: number }> = {
+    active: { r: 16, g: 185, b: 129 }, // Emerald Green (#10B981)
+    idle: { r: 245, g: 158, b: 11 }, // Amber (#F59E0B)
+    pomodoro: { r: 244, g: 63, b: 94 }, // Coral Rose (#F43F5E)
+    paused: { r: 148, g: 163, b: 184 } // Neutral Slate (#94A3B8)
+  }
+  const accent = badgeColors[status]
+  const aa = 2.2 / size
+
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      const dist = Math.hypot(x - center, y - center)
-      const idx = (y * size + x) * 4
-      if (dist <= 6.2) {
-        // Inner ring / pulse dot
-        const isInner = dist <= 2.4
-        buf[idx] = isInner ? 255 : colors.b
-        buf[idx + 1] = isInner ? 255 : colors.g
-        buf[idx + 2] = isInner ? 255 : colors.r
-        buf[idx + 3] = 255
-      } else if (dist <= 7.2) {
-        // Anti-aliased edge
-        buf[idx] = colors.b
-        buf[idx + 1] = colors.g
-        buf[idx + 2] = colors.r
-        buf[idx + 3] = 110
-      } else {
-        buf[idx + 3] = 0
+      // Normalized [-1, 1]
+      const nx = ((x + 0.5) / size) * 2 - 1
+      const ny = ((y + 0.5) / size) * 2 - 1
+
+      let outR = 0
+      let outG = 0
+      let outB = 0
+      let outA = 0
+
+      const blend = (r: number, g: number, b: number, a: number): void => {
+        const sa = clamp(a)
+        if (sa <= 0) return
+        const na = sa + outA * (1 - sa)
+        if (na <= 0) return
+        outR = (r * sa + outR * outA * (1 - sa)) / na
+        outG = (g * sa + outG * outA * (1 - sa)) / na
+        outB = (b * sa + outB * outA * (1 - sa)) / na
+        outA = na
       }
+
+      // 1) High-contrast dark slate dial circle with bright rim so it stands out on BOTH light & dark taskbars
+      const distCenter = Math.hypot(nx + 0.06, ny + 0.06)
+      const dialOuter = 0.82
+      const dDial = distCenter - dialOuter
+      const dialAlpha = 1 - smoothstep(-aa, aa, dDial)
+      if (dialAlpha > 0) {
+        blend(18, 28, 46, dialAlpha * 0.94)
+      }
+
+      // Crisp white dial ring
+      const dRing = Math.abs(distCenter - 0.68) - 0.105
+      const ringAlpha = 1 - smoothstep(-aa, aa, dRing)
+      if (ringAlpha > 0) {
+        blend(248, 250, 252, ringAlpha * 0.95)
+      }
+
+      // Clock / Pace hands inside dial
+      const dHand1 = sdSegment(nx, ny, -0.06, -0.06, 0.30, -0.34) - 0.115
+      const dHand2 = sdSegment(nx, ny, -0.06, -0.06, -0.28, -0.20) - 0.10
+      const handAlpha = Math.max(
+        1 - smoothstep(-aa, aa, dHand1),
+        1 - smoothstep(-aa, aa, dHand2)
+      )
+      if (handAlpha > 0) {
+        blend(255, 255, 255, handAlpha)
+      }
+
+      // 2) Prominent bottom-right status indicator dot with dark halo separator
+      const dotDist = Math.hypot(nx - 0.48, ny - 0.48)
+      const haloAlpha = 1 - smoothstep(-aa, aa, dotDist - 0.46)
+      if (haloAlpha > 0) {
+        blend(15, 23, 42, haloAlpha * 0.96)
+      }
+      const dotAlpha = 1 - smoothstep(-aa, aa, dotDist - 0.35)
+      if (dotAlpha > 0) {
+        blend(accent.r, accent.g, accent.b, dotAlpha)
+      }
+
+      const idx = (y * size + x) * 4
+      // Electron createFromBitmap uses BGRA byte order on little-endian platforms
+      buf[idx] = Math.round(clamp(outB, 0, 255))
+      buf[idx + 1] = Math.round(clamp(outG, 0, 255))
+      buf[idx + 2] = Math.round(clamp(outR, 0, 255))
+      buf[idx + 3] = Math.round(clamp(outA * 255, 0, 255))
     }
   }
-  return nativeImage.createFromBitmap(buf, { width: size, height: size })
+  return buf
+}
+
+/**
+ * Builds a HiDPI (@1x 16x16 + @2x 32x32) WorkPacer System Tray NativeImage
+ * for crisp rendering on Windows 10/11 Taskbar & macOS Retina Menu Bar.
+ */
+function createWorkPacerTrayIcon(status: TrayVisualStatus): Electron.NativeImage {
+  const img = nativeImage.createEmpty()
+  img.addRepresentation({
+    scaleFactor: 1.0,
+    width: 16,
+    height: 16,
+    buffer: renderTrayBitmapBGRA(16, status)
+  })
+  img.addRepresentation({
+    scaleFactor: 2.0,
+    width: 32,
+    height: 32,
+    buffer: renderTrayBitmapBGRA(32, status)
+  })
+  return img
 }
 
 export class TrayManager {
   private tray: Tray | null = null
-  private lastLang: LanguageCode | null = null
-  private lastStatusKey = ''
+  private lastMenuSignature = ''
+  private lastVisualStatus: TrayVisualStatus | null = null
 
   constructor(private actions: TrayActions) {}
 
-  public init(settings: AppSettings, state: LiveTrackingState): void {
+  public init(
+    settings: AppSettings,
+    state: LiveTrackingState,
+    presets: QuickIdlePreset[]
+  ): void {
     try {
-      const icon = createStatusTrayIcon('active')
+      const icon = createWorkPacerTrayIcon('active')
       this.tray = new Tray(icon)
-      this.tray.setToolTip('IdlePulse')
+      this.tray.setToolTip('WorkPacer')
       this.tray.on('double-click', () => this.actions.onOpenMain())
-      this.refresh(settings, state, true)
+      this.refresh(settings, state, presets, true)
     } catch {
-      // Headless environment without status-notifier tray daemon: safely ignore
       this.tray = null
     }
   }
 
-  public refresh(settings: AppSettings, state: LiveTrackingState, force = false): void {
+  public refresh(
+    settings: AppSettings,
+    state: LiveTrackingState,
+    presets: QuickIdlePreset[],
+    force = false
+  ): void {
     if (!this.tray) return
-    const visualStatus: 'active' | 'idle' | 'pomodoro' = state.pomodoro.running
-      ? 'pomodoro'
-      : state.status === 'active'
-        ? 'active'
-        : 'idle'
 
-    const statusKey = `${settings.language}-${state.status}-${visualStatus}-${settings.stickyWidget.visible}`
+    const visualStatus: TrayVisualStatus =
+      state.status === 'paused'
+        ? 'paused'
+        : state.pomodoro.running
+          ? 'pomodoro'
+          : state.status === 'active'
+            ? 'active'
+            : 'idle'
+
     const lang = settings.language
-
-    // Update tooltip live with elapsed timer
     const mins = Math.floor(state.currentSessionElapsedSec / 60)
     const statusLabel = translateMain(lang, `status.${state.status}`)
-    this.tray.setToolTip(`IdlePulse — ${statusLabel} (${mins}m)`)
+    this.tray.setToolTip(`WorkPacer — ${statusLabel} (${mins}m)`)
 
-    if (!force && statusKey === this.lastStatusKey && lang === this.lastLang) {
+    if (this.lastVisualStatus !== visualStatus) {
+      this.lastVisualStatus = visualStatus
+      this.tray.setImage(createWorkPacerTrayIcon(visualStatus))
+    }
+
+    const presetSig = presets.map((p) => `${p.id}:${p.label}:${p.usageCount}`).join('|')
+    const menuSignature = `${lang}-${state.status}-${visualStatus}-${settings.stickyWidget.visible}-${presetSig}`
+    if (!force && menuSignature === this.lastMenuSignature) {
       return
     }
-    this.lastStatusKey = statusKey
-    this.lastLang = lang
+    this.lastMenuSignature = menuSignature
 
-    this.tray.setImage(createStatusTrayIcon(visualStatus))
+    const presetMenuItems: Electron.MenuItemConstructorOptions[] = presets.map((p) => ({
+      label: `${p.label}${p.usageCount > 0 ? ` (${p.usageCount})` : ''}`,
+      click: () => this.actions.onTriggerPreset(p.id)
+    }))
 
     const menu = Menu.buildFromTemplate([
       {
-        label: `IdlePulse • ${statusLabel}`,
+        label: `WorkPacer • ${statusLabel}`,
         enabled: false
       },
       { type: 'separator' },
@@ -122,22 +229,17 @@ export class TrayManager {
             {
               label: translateMain(lang, 'tray.resumeWork'),
               click: () => this.actions.onResumeWork()
-            },
-            { type: 'separator' as const }
+            }
           ]
+        : [
+            {
+              label: translateMain(lang, 'tray.pauseTracking'),
+              click: () => this.actions.onTogglePause()
+            }
+          ]),
+      ...(presetMenuItems.length > 0
+        ? [{ type: 'separator' as const }, ...presetMenuItems]
         : []),
-      {
-        label: translateMain(lang, 'tray.manualLunch'),
-        click: () => this.actions.onManualIdle('eating')
-      },
-      {
-        label: translateMain(lang, 'tray.manualMeeting'),
-        click: () => this.actions.onManualIdle('meeting')
-      },
-      {
-        label: translateMain(lang, 'tray.manualBreak'),
-        click: () => this.actions.onManualIdle('rest')
-      },
       { type: 'separator' },
       {
         label: translateMain(lang, 'tray.languageMenu'),

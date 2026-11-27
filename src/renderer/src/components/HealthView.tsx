@@ -27,12 +27,12 @@ export const HealthView: React.FC<HealthViewProps> = ({ state, settings }) => {
         {/* 1. 20-20-20 Eye Care */}
         <div className="card-surface p-5 space-y-4">
           <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-lg bg-[var(--sky-soft)] text-[var(--sky)] flex items-center justify-center shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-[var(--sky-soft)] text-[var(--sky)] flex items-center justify-center shrink-0">
                 <Eye className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-sm font-semibold">{t('health.eyeCareTitle')}</h2>
+                <h2 className="text-sm font-bold">{t('health.eyeCareTitle')}</h2>
                 <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                   {t('health.eyeCareDesc', { min: settings.eyeCareIntervalMinutes })}
                 </p>
@@ -45,12 +45,12 @@ export const HealthView: React.FC<HealthViewProps> = ({ state, settings }) => {
               onChange={(e) =>
                 void bridge.updateSettings({ eyeCareEnabled: e.target.checked })
               }
-              className="w-4 h-4 accent-[var(--accent)] mt-1"
+              className="w-4 h-4 accent-[var(--accent)] mt-1 cursor-pointer"
             />
           </div>
 
-          <div className="p-3 rounded-lg bg-[var(--bg-subtle)] flex items-center justify-between">
-            <span className="text-xs text-[var(--text-secondary)]">
+          <div className="px-4 py-3 rounded-2xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)] flex items-center justify-between">
+            <span className="text-xs font-medium text-[var(--text-secondary)]">
               {t('health.nextEyeBreak')}
             </span>
             <span className="font-mono text-lg font-bold tabular-nums text-[var(--sky)]">
@@ -70,7 +70,7 @@ export const HealthView: React.FC<HealthViewProps> = ({ state, settings }) => {
               }
               className="flex-1 accent-[var(--accent)]"
             />
-            <span className="font-mono text-xs tabular-nums w-12 text-right">
+            <span className="font-mono text-xs font-semibold tabular-nums w-12 text-right">
               {settings.eyeCareIntervalMinutes}m
             </span>
           </div>
@@ -89,12 +89,12 @@ export const HealthView: React.FC<HealthViewProps> = ({ state, settings }) => {
         {/* 2. Long Sitting Alert */}
         <div className="card-surface p-5 space-y-4">
           <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-lg bg-[var(--amber-soft)] text-[var(--amber)] flex items-center justify-center shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-[var(--amber-soft)] text-[var(--amber)] flex items-center justify-center shrink-0">
                 <PersonStanding className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-sm font-semibold">{t('health.sittingTitle')}</h2>
+                <h2 className="text-sm font-bold">{t('health.sittingTitle')}</h2>
                 <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                   {t('health.sittingDesc', { min: settings.longSittingMinutes })}
                 </p>
@@ -107,12 +107,12 @@ export const HealthView: React.FC<HealthViewProps> = ({ state, settings }) => {
               onChange={(e) =>
                 void bridge.updateSettings({ longSittingEnabled: e.target.checked })
               }
-              className="w-4 h-4 accent-[var(--accent)] mt-1"
+              className="w-4 h-4 accent-[var(--accent)] mt-1 cursor-pointer"
             />
           </div>
 
-          <div className="p-3 rounded-lg bg-[var(--bg-subtle)] flex items-center justify-between">
-            <span className="text-xs text-[var(--text-secondary)]">
+          <div className="px-4 py-3 rounded-2xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)] flex items-center justify-between">
+            <span className="text-xs font-medium text-[var(--text-secondary)]">
               {t('health.continuousActive')}
             </span>
             <span className="font-mono text-lg font-bold tabular-nums text-[var(--amber)]">
@@ -132,7 +132,7 @@ export const HealthView: React.FC<HealthViewProps> = ({ state, settings }) => {
               }
               className="flex-1 accent-[var(--accent)]"
             />
-            <span className="font-mono text-xs tabular-nums w-12 text-right">
+            <span className="font-mono text-xs font-semibold tabular-nums w-12 text-right">
               {settings.longSittingMinutes}m
             </span>
           </div>
@@ -141,12 +141,12 @@ export const HealthView: React.FC<HealthViewProps> = ({ state, settings }) => {
         {/* 3. Gentle Return-to-Work Nudge */}
         <div className="card-surface p-5 space-y-4">
           <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-lg bg-[var(--accent-soft)] text-[var(--accent)] flex items-center justify-center shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-[var(--accent-soft)] text-[var(--accent)] flex items-center justify-center shrink-0">
                 <BellRing className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-sm font-semibold">{t('health.returnWorkTitle')}</h2>
+                <h2 className="text-sm font-bold">{t('health.returnWorkTitle')}</h2>
                 <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                   {t('health.returnWorkDesc', { min: settings.returnToWorkMaxIdleMinutes })}
                 </p>
@@ -159,7 +159,7 @@ export const HealthView: React.FC<HealthViewProps> = ({ state, settings }) => {
               onChange={(e) =>
                 void bridge.updateSettings({ returnToWorkReminderEnabled: e.target.checked })
               }
-              className="w-4 h-4 accent-[var(--accent)] mt-1"
+              className="w-4 h-4 accent-[var(--accent)] mt-1 cursor-pointer"
             />
           </div>
 
@@ -177,7 +177,7 @@ export const HealthView: React.FC<HealthViewProps> = ({ state, settings }) => {
               }
               className="flex-1 accent-[var(--accent)]"
             />
-            <span className="font-mono text-xs tabular-nums w-12 text-right">
+            <span className="font-mono text-xs font-semibold tabular-nums w-12 text-right">
               {settings.returnToWorkMaxIdleMinutes}m
             </span>
           </div>
@@ -185,12 +185,12 @@ export const HealthView: React.FC<HealthViewProps> = ({ state, settings }) => {
 
         {/* 4. Daily Active Goal */}
         <div className="card-surface p-5 space-y-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg bg-[var(--accent-soft)] text-[var(--accent)] flex items-center justify-center shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-[var(--accent-soft)] text-[var(--accent)] flex items-center justify-center shrink-0">
               <Target className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold">{t('health.dailyGoalTitle')}</h2>
+              <h2 className="text-sm font-bold">{t('health.dailyGoalTitle')}</h2>
               <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                 {t('health.dailyGoalDesc')}
               </p>
@@ -198,7 +198,7 @@ export const HealthView: React.FC<HealthViewProps> = ({ state, settings }) => {
           </div>
 
           <div className="space-y-2">
-            <div className="flex justify-between text-xs font-medium tabular-nums">
+            <div className="flex justify-between text-xs font-semibold tabular-nums">
               <span>
                 {formatDurationHuman(state.todayActiveSec)} /{' '}
                 {formatDurationHuman(settings.dailyGoalMinutes * 60)}
@@ -225,7 +225,7 @@ export const HealthView: React.FC<HealthViewProps> = ({ state, settings }) => {
               }
               className="flex-1 accent-[var(--accent)]"
             />
-            <span className="font-mono text-xs tabular-nums w-14 text-right">
+            <span className="font-mono text-xs font-semibold tabular-nums w-14 text-right">
               {(settings.dailyGoalMinutes / 60).toFixed(1)}h
             </span>
           </div>

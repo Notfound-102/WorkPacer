@@ -10,6 +10,10 @@ import {
   DEFAULT_SETTINGS,
   HeatmapCell,
   IdleTag,
+  LanguageCode,
+  MAX_QUICK_IDLE_PRESETS,
+  QuickIdlePreset,
+  QuickPresetIcon,
   SessionRecord,
   SessionType,
   SmartExceptionReason,
@@ -17,6 +21,7 @@ import {
   TopIdleHourItem
 } from '../shared/types'
 import { getDayStartMs } from '../shared/reportFormatter'
+import { translateMain } from '../shared/i18nResources'
 
 export interface HeartbeatRow {
   lastSeenAt: number
@@ -60,6 +65,18 @@ function mapTaskRow(row: any): TaskRecord {
   }
 }
 
+function mapQuickPresetRow(row: any): QuickIdlePreset {
+  return {
+    id: String(row.id),
+    label: String(row.label),
+    icon: (row.icon || 'coffee') as QuickPresetIcon,
+    tag: (row.tag || 'rest') as IdleTag,
+    usageCount: Number(row.usage_count || 0),
+    lastUsedAt: Number(row.last_used_at || 0),
+    createdAt: Number(row.created_at || 0)
+  }
+}
+
 export class IdlePulseDatabase {
   private db: Database.Database
 
@@ -69,6 +86,15 @@ export class IdlePulseDatabase {
     this.db.pragma('synchronous = NORMAL')
     this.db.pragma('foreign_keys = ON')
     this.migrate()
+    this.seedDefaultQuickPresetsIfNeeded()
+  }
+
+  private ensureColumn(tableName: string, columnName: string, columnDefinition: string): void {
+    const cols = this.db.prepare(`PRAGMA table_info(${tableName})`).all() as { name: string }[]
+    const exists = cols.some((c) => c.name === columnName)
+    if (!exists) {
+      this.db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDefinition}`)
+    }
   }
 
   private migrate(): void {
@@ -123,7 +149,79 @@ export class IdlePulseDatabase {
         key TEXT PRIMARY KEY,
         sent_at INTEGER NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS quick_idle_presets (
+        id TEXT PRIMARY KEY,
+        label TEXT NOT NULL,
+        icon TEXT NOT NULL,
+        tag TEXT NOT NULL DEFAULT 'rest',
+        usage_count INTEGER NOT NULL DEFAULT 0,
+        last_used_at INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL DEFAULT 0
+      );
     `)
+
+    // Safe forward-compatible column migrations for existing databases
+    this.ensureColumn('sessions', 'smart_exception', "TEXT NOT NULL DEFAULT 'none'")
+    this.ensureColumn('sessions', 'is_manual', 'INTEGER NOT NULL DEFAULT 0')
+    this.ensureColumn('quick_idle_presets', 'tag', "TEXT NOT NULL DEFAULT 'rest'")
+    this.ensureColumn('quick_idle_presets', 'usage_count', 'INTEGER NOT NULL DEFAULT 0')
+    this.ensureColumn('quick_idle_presets', 'last_used_at', 'INTEGER NOT NULL DEFAULT 0')
+    this.ensureColumn('quick_idle_presets', 'created_at', 'INTEGER NOT NULL DEFAULT 0')
+  }
+
+  private seedDefaultQuickPresetsIfNeeded(): void {
+    const seededFlag = this.db
+      .prepare('SELECT value FROM settings WHERE key = ?')
+      .get('quick_presets_seeded') as { value: string } | undefined
+
+    const existingCount = (
+      this.db.prepare('SELECT COUNT(*) as cnt FROM quick_idle_presets').get() as { cnt: number }
+    ).cnt
+
+    if (seededFlag || existingCount > 0) {
+      if (!seededFlag) {
+        this.db
+          .prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('quick_presets_seeded', '1')")
+          .run()
+      }
+      return
+    }
+
+    const lang: LanguageCode = this.getSettings().language || 'vi'
+    const now = Date.now()
+    const defaults: Array<{ id: string; label: string; icon: QuickPresetIcon; tag: IdleTag }> = [
+      {
+        id: 'preset-lunch',
+        label: translateMain(lang, 'tags.lunchQuick'),
+        icon: 'utensils',
+        tag: 'eating'
+      },
+      {
+        id: 'preset-meeting',
+        label: translateMain(lang, 'tags.meetingQuick'),
+        icon: 'users',
+        tag: 'meeting'
+      },
+      {
+        id: 'preset-short-break',
+        label: translateMain(lang, 'tags.shortBreakQuick'),
+        icon: 'coffee',
+        tag: 'rest'
+      }
+    ]
+
+    const stmt = this.db.prepare(
+      `INSERT INTO quick_idle_presets (id, label, icon, tag, usage_count, last_used_at, created_at)
+       VALUES (?, ?, ?, ?, 0, 0, ?)`
+    )
+    defaults.forEach((p, idx) => {
+      stmt.run(p.id, p.label, p.icon, p.tag, now + idx)
+    })
+
+    this.db
+      .prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('quick_presets_seeded', '1')")
+      .run()
   }
 
   public close(): void {
@@ -147,7 +245,10 @@ export class IdlePulseDatabase {
         stickyWidget: {
           ...DEFAULT_SETTINGS.stickyWidget,
           ...(parsed.stickyWidget || {})
-        }
+        },
+        returnPopupBounds: parsed.returnPopupBounds
+          ? { ...parsed.returnPopupBounds }
+          : undefined
       }
     } catch {
       return { ...DEFAULT_SETTINGS, stickyWidget: { ...DEFAULT_SETTINGS.stickyWidget } }
@@ -172,9 +273,91 @@ export class IdlePulseDatabase {
       stickyWidget: {
         ...current.stickyWidget,
         ...(partial.stickyWidget || {})
-      }
+      },
+      returnPopupBounds:
+        partial.returnPopupBounds !== undefined
+          ? { ...(current.returnPopupBounds || {}), ...partial.returnPopupBounds }
+          : current.returnPopupBounds
     }
     return this.saveSettings(next)
+  }
+
+  // --- Quick Idle Presets (Max 6, Auto-sorted by usage_count DESC, last_used_at DESC) ---
+  public getQuickIdlePresets(): QuickIdlePreset[] {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM quick_idle_presets
+         ORDER BY usage_count DESC, last_used_at DESC, created_at ASC`
+      )
+      .all()
+    return rows.map(mapQuickPresetRow)
+  }
+
+  public createQuickIdlePreset(
+    input: { label: string; icon: QuickPresetIcon; tag?: IdleTag },
+    nowMs = Date.now()
+  ): QuickIdlePreset[] {
+    const countRow = this.db
+      .prepare('SELECT COUNT(*) as cnt FROM quick_idle_presets')
+      .get() as { cnt: number }
+    if (countRow.cnt >= MAX_QUICK_IDLE_PRESETS) {
+      throw new Error(`MAX_QUICK_IDLE_PRESETS_EXCEEDED (${MAX_QUICK_IDLE_PRESETS})`)
+    }
+
+    const cleanLabel = input.label.trim()
+    if (!cleanLabel) {
+      throw new Error('Preset label cannot be empty')
+    }
+
+    const id = `preset-${nowMs}-${Math.random().toString(36).slice(2, 7)}`
+    this.db
+      .prepare(
+        `INSERT INTO quick_idle_presets (id, label, icon, tag, usage_count, last_used_at, created_at)
+         VALUES (?, ?, ?, ?, 0, 0, ?)`
+      )
+      .run(id, cleanLabel, input.icon, input.tag ?? 'rest', nowMs)
+
+    return this.getQuickIdlePresets()
+  }
+
+  public updateQuickIdlePreset(
+    id: string,
+    updates: Partial<{ label: string; icon: QuickPresetIcon; tag: IdleTag }>
+  ): QuickIdlePreset[] {
+    const existing = this.db
+      .prepare('SELECT * FROM quick_idle_presets WHERE id = ?')
+      .get(id) as any
+    if (!existing) return this.getQuickIdlePresets()
+
+    const nextLabel =
+      updates.label !== undefined && updates.label.trim()
+        ? updates.label.trim()
+        : String(existing.label)
+    const nextIcon = updates.icon ?? existing.icon
+    const nextTag = updates.tag ?? existing.tag
+
+    this.db
+      .prepare('UPDATE quick_idle_presets SET label = ?, icon = ?, tag = ? WHERE id = ?')
+      .run(nextLabel, nextIcon, nextTag, id)
+
+    return this.getQuickIdlePresets()
+  }
+
+  public deleteQuickIdlePreset(id: string): QuickIdlePreset[] {
+    this.db.prepare('DELETE FROM quick_idle_presets WHERE id = ?').run(id)
+    return this.getQuickIdlePresets()
+  }
+
+  public recordQuickIdlePresetUsage(id: string, nowMs = Date.now()): QuickIdlePreset | null {
+    this.db
+      .prepare(
+        `UPDATE quick_idle_presets
+         SET usage_count = usage_count + 1, last_used_at = ?
+         WHERE id = ?`
+      )
+      .run(nowMs, id)
+    const row = this.db.prepare('SELECT * FROM quick_idle_presets WHERE id = ?').get(id)
+    return row ? mapQuickPresetRow(row) : null
   }
 
   // --- Heartbeats & Crash/Shutdown/Sleep Gap Recovery ---
@@ -214,7 +397,6 @@ export class IdlePulseDatabase {
       this.closeSession(Number(s.id), closeAt)
     }
 
-    // Close any dangling tasks at last heartbeat
     const openTasks = this.db.prepare('SELECT * FROM tasks WHERE end_time IS NULL').all() as any[]
     for (const t of openTasks) {
       const closeAt = Math.max(Number(t.start_time), fallbackCloseMs)
@@ -291,10 +473,7 @@ export class IdlePulseDatabase {
     return this.getSessionById(sessionId)
   }
 
-  public updateSessionSmartException(
-    sessionId: number,
-    reason: SmartExceptionReason
-  ): void {
+  public updateSessionSmartException(sessionId: number, reason: SmartExceptionReason): void {
     this.db
       .prepare('UPDATE sessions SET smart_exception = ? WHERE id = ?')
       .run(reason, sessionId)
@@ -375,10 +554,14 @@ export class IdlePulseDatabase {
           ? Number(row.end_time)
           : null
     const dur =
-      nextEnd !== null ? Math.max(0, Math.round((nextEnd - nextStart) / 1000)) : Number(row.duration_sec)
+      nextEnd !== null
+        ? Math.max(0, Math.round((nextEnd - nextStart) / 1000))
+        : Number(row.duration_sec)
 
     this.db
-      .prepare('UPDATE tasks SET title = ?, start_time = ?, end_time = ?, duration_sec = ? WHERE id = ?')
+      .prepare(
+        'UPDATE tasks SET title = ?, start_time = ?, end_time = ?, duration_sec = ? WHERE id = ?'
+      )
       .run(nextTitle, nextStart, nextEnd, dur, id)
   }
 
@@ -438,7 +621,10 @@ export class IdlePulseDatabase {
   }
 
   // --- Totals & Analytics ---
-  public getDayTotals(dateStr: string, nowMs = Date.now()): {
+  public getDayTotals(
+    dateStr: string,
+    nowMs = Date.now()
+  ): {
     activeSec: number
     idleSec: number
     microSec: number
@@ -516,7 +702,6 @@ export class IdlePulseDatabase {
         })
       }
     } else {
-      // 'week' - past 6 weeks
       const anchorStart = getDayStartMs(todayDate)
       const anchorDate = new Date(anchorStart)
       const dayOfWeek = anchorDate.getDay()
@@ -535,7 +720,6 @@ export class IdlePulseDatabase {
       }
     }
 
-    // 14-day history for 7x24 Heatmap & Top Idle Hours
     const historyEnd = getDayStartMs(todayDate) + 24 * 3600 * 1000
     const historyStart = historyEnd - 14 * 24 * 3600 * 1000
     const histSessions = this.getSessionsOverlapping(historyStart, historyEnd)
@@ -688,6 +872,7 @@ export class IdlePulseDatabase {
 
     if (format === 'json') {
       const payload = {
+        app: 'WorkPacer',
         exportedAt: new Date().toISOString(),
         range: { startDate: startDateStr, endDate: endDateStr },
         sessions,
@@ -699,7 +884,6 @@ export class IdlePulseDatabase {
       }
     }
 
-    // UTF-8 BOM (\uFEFF) so Microsoft Excel on Windows & macOS renders Vietnamese/Japanese properly
     const headers = [
       'RecordType',
       'ID',

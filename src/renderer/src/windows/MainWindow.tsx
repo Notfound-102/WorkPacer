@@ -1,19 +1,29 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  Activity,
   BarChart3,
   CheckSquare,
   FileText,
   HeartPulse,
   Layers,
+  Monitor,
+  Moon,
+  Pause,
   Play,
   Settings,
-  Sparkles
+  Sun
 } from 'lucide-react'
-import { AppSettings, LanguageCode, LiveTrackingState, MainTabId } from '@shared/types'
-import { bridge, isElectronEnv, simulateBrowserReturnPopup } from '../lib/bridge'
+import {
+  AppSettings,
+  LanguageCode,
+  LiveTrackingState,
+  MainTabId,
+  QuickIdlePreset,
+  ThemeMode
+} from '@shared/types'
+import { bridge, isElectronEnv } from '../lib/bridge'
 import { formatClockTimer } from '../lib/formatters'
+import { WorkPacerLogo } from '../components/WorkPacerLogo'
 import { DashboardView } from '../components/DashboardView'
 import { TasksPomodoroView } from '../components/TasksPomodoroView'
 import { DailyReportView } from '../components/DailyReportView'
@@ -26,6 +36,7 @@ import { BreakOverlay } from './BreakOverlay'
 interface MainWindowProps {
   state: LiveTrackingState
   settings: AppSettings
+  presets: QuickIdlePreset[]
   activeTab: MainTabId
   onSelectTab: (tab: MainTabId) => void
 }
@@ -33,6 +44,7 @@ interface MainWindowProps {
 export const MainWindow: React.FC<MainWindowProps> = ({
   state,
   settings,
+  presets,
   activeTab,
   onSelectTab
 }) => {
@@ -46,158 +58,201 @@ export const MainWindow: React.FC<MainWindowProps> = ({
     { id: 'settings', label: t('nav.settings'), icon: Settings }
   ]
 
-  const isIdle = state.status !== 'active'
+  const statusColor =
+    state.status === 'paused'
+      ? 'bg-[var(--slate-paused)]'
+      : state.pomodoro.running
+        ? 'bg-[var(--coral)]'
+        : state.status === 'active'
+          ? 'bg-[var(--accent)]'
+          : 'bg-[var(--amber)]'
+
+  const statusText =
+    state.status === 'manual_idle' && state.currentPresetLabel
+      ? state.currentPresetLabel
+      : t(`status.${state.status}`)
+
+  const themeOptions: { mode: ThemeMode; icon: React.FC<{ className?: string }>; title: string }[] =
+    [
+      { mode: 'light', icon: Sun, title: t('settings.themeLight') },
+      { mode: 'dark', icon: Moon, title: t('settings.themeDark') },
+      { mode: 'system', icon: Monitor, title: t('settings.themeSystem') }
+    ]
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-[var(--bg-app)] text-[var(--text-primary)]">
-      {/* Sidebar */}
-      <aside className="w-full md:w-64 shrink-0 bg-[var(--bg-sidebar)] border-b md:border-b-0 md:border-r border-[var(--border-subtle)] p-4 flex flex-col justify-between gap-4">
-        <div className="space-y-4">
-          {/* App Brand */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-[var(--accent)] text-[var(--accent-fg)] flex items-center justify-center shadow-xs">
-                <Activity className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="font-bold text-sm tracking-tight leading-none">
+    <div className="h-screen w-screen overflow-hidden flex flex-col ambient-mesh-bg text-[var(--text-primary)]">
+      {/* Native Titlebar Drag Region (Matches Windows/macOS caption overlay height = 36px) */}
+      <header className="drag-region h-9 shrink-0 flex items-center justify-between px-4">
+        <div className="flex items-center gap-2 text-xs font-semibold text-[var(--text-muted)] pl-14 md:pl-1">
+          <span>WorkPacer</span>
+          <span>•</span>
+          <span className="tabular-nums">
+            {settings.shiftStart}–{settings.shiftEnd}
+          </span>
+        </div>
+        <div className="w-32" />
+      </header>
+
+      {/* Main Workspace Container */}
+      <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-4 px-3.5 pb-3.5">
+        {/* Floating Liquid Glass Sidebar — Zero Vertical Scrollbar Guaranteed */}
+        <aside className="w-full md:w-60 shrink-0 glass-sidebar p-3.5 flex flex-col justify-between overflow-hidden">
+          {/* Top Section: Brand + Live Status Pill + Active Glass Pill Navigation */}
+          <div className="space-y-3">
+            {/* Brand Header */}
+            <div className="flex items-center gap-2.5 px-1">
+              <WorkPacerLogo size={32} />
+              <div className="min-w-0">
+                <div className="font-bold text-sm tracking-tight leading-none truncate">
                   {t('app.name')}
                 </div>
-                <div className="text-[11px] text-[var(--text-muted)] mt-1">
-                  Shift {settings.shiftStart}–{settings.shiftEnd}
+                <div className="text-[11px] text-[var(--text-muted)] mt-1 truncate">
+                  {settings.userName}
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Live Status Card */}
-          <div className="card-surface p-3 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <span
-                  className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                    isIdle ? 'bg-[var(--amber)]' : 'bg-[var(--accent)]'
-                  }`}
-                />
-                <span className="text-xs font-semibold truncate">
-                  {t(`status.${state.status}`)}
-                </span>
+            {/* Compact Live Status Pill Card */}
+            <div className="px-3 py-2 rounded-2xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)] flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${statusColor}`} />
+                  <span className="text-[11px] font-semibold truncate">{statusText}</span>
+                </div>
+                <div className="font-mono text-sm font-bold tabular-nums text-[var(--accent)] mt-0.5">
+                  {formatClockTimer(state.currentSessionElapsedSec)}
+                </div>
               </div>
-              <span className="font-mono text-xs font-bold tabular-nums text-[var(--accent)]">
-                {formatClockTimer(state.currentSessionElapsedSec)}
-              </span>
+
+              {state.status !== 'active' ? (
+                <button
+                  type="button"
+                  title={t('status.resumeWork')}
+                  onClick={() => void bridge.resumeFromIdle()}
+                  className="btn-primary p-2 shrink-0"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  title={t('status.pauseTracking')}
+                  onClick={() => void bridge.togglePauseTracking()}
+                  className="btn-subtle p-2 shrink-0"
+                >
+                  <Pause className="w-3.5 h-3.5 text-[var(--text-secondary)]" />
+                </button>
+              )}
             </div>
 
-            {state.currentSmartException !== 'none' && (
-              <div className="text-[11px] text-[var(--sky)] bg-[var(--sky-soft)] px-2 py-1 rounded">
-                {state.currentSmartException === 'fullscreen_media'
-                  ? t('status.smartExceptionMedia')
-                  : t('status.smartExceptionCall')}
-              </div>
-            )}
-
-            {isIdle && (
-              <button
-                type="button"
-                onClick={() => void bridge.resumeFromIdle()}
-                className="w-full btn-primary py-1.5 text-xs flex items-center justify-center gap-1"
-              >
-                <Play className="w-3 h-3" />
-                {t('status.resumeWork')}
-              </button>
-            )}
+            {/* Navigation Items (Active Glass Pill) */}
+            <nav className="flex md:flex-col gap-1 overflow-x-auto md:overflow-visible">
+              {navItems.map(({ id, label, icon: Icon }) => {
+                const active = activeTab === id
+                return (
+                  <button
+                    key={id}
+                    id={`nav-tab-${id}`}
+                    type="button"
+                    onClick={() => onSelectTab(id)}
+                    className={`px-3.5 py-2 rounded-full text-xs font-semibold flex items-center gap-2.5 whitespace-nowrap transition-all duration-200 ${
+                      active
+                        ? 'nav-glass-pill-active'
+                        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{label}</span>
+                  </button>
+                )
+              })}
+            </nav>
           </div>
 
-          {/* Navigation */}
-          <nav className="flex md:flex-col gap-1 overflow-x-auto">
-            {navItems.map(({ id, label, icon: Icon }) => {
-              const active = activeTab === id
-              return (
-                <button
-                  key={id}
-                  id={`nav-tab-${id}`}
-                  type="button"
-                  onClick={() => onSelectTab(id)}
-                  className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-2.5 whitespace-nowrap transition-colors ${
-                    active
-                      ? 'bg-[var(--accent-soft)] text-[var(--accent)]'
-                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]'
-                  }`}
-                >
-                  <Icon className="w-4 h-4 shrink-0" />
-                  <span className="truncate">{label}</span>
-                </button>
-              )
-            })}
-          </nav>
-        </div>
-
-        {/* Bottom Controls: Sticky Widget Toggle + Realtime Language Bar */}
-        <div className="space-y-2.5 pt-3 border-t border-[var(--border-subtle)]">
-          <button
-            id="sidebar-toggle-sticky-widget"
-            type="button"
-            onClick={() => void bridge.toggleStickyWidget()}
-            className={`w-full py-2 px-3 rounded-lg text-xs font-semibold border flex items-center justify-between transition-colors ${
-              settings.stickyWidget.visible
-                ? 'bg-[var(--accent-soft)] border-[var(--accent)] text-[var(--accent)]'
-                : 'btn-subtle'
-            }`}
-          >
-            <span className="flex items-center gap-2 truncate">
-              <Layers className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">{t('nav.stickyWidget')}</span>
-            </span>
-            <span className="text-[10px] uppercase font-bold">
-              {settings.stickyWidget.visible ? 'ON' : 'OFF'}
-            </span>
-          </button>
-
-          {!isElectronEnv && (
+          {/* Bottom Dock: Sticky Widget Toggle + Theme & Language Pills */}
+          <div className="space-y-2 pt-2.5 border-t border-[var(--border-subtle)]">
             <button
-              id="preview-simulate-return-btn"
+              id="sidebar-toggle-sticky-widget"
               type="button"
-              onClick={() => simulateBrowserReturnPopup(12)}
-              className="w-full btn-subtle py-1.5 px-2.5 text-[11px] font-medium flex items-center justify-center gap-1.5"
+              onClick={() => void bridge.toggleStickyWidget()}
+              className={`w-full py-1.5 px-3.5 rounded-full text-xs font-semibold border flex items-center justify-between transition-all ${
+                settings.stickyWidget.visible
+                  ? 'bg-[var(--accent-soft)] border-[var(--accent)] text-[var(--accent)]'
+                  : 'btn-subtle'
+              }`}
             >
-              <Sparkles className="w-3.5 h-3.5 text-[var(--amber)]" />
-              <span>Demo Quick Tag Popup (12m)</span>
+              <span className="flex items-center gap-2 truncate">
+                <Layers className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">{t('nav.stickyWidget')}</span>
+              </span>
+              <span className="text-[10px] uppercase font-bold">
+                {settings.stickyWidget.visible ? 'ON' : 'OFF'}
+              </span>
             </button>
-          )}
 
-          {/* Realtime Language Switcher */}
-          <div className="grid grid-cols-3 gap-1 p-0.5 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
-            {(['vi', 'en', 'ja'] as LanguageCode[]).map((code) => (
-              <button
-                key={code}
-                id={`lang-switch-${code}`}
-                type="button"
-                onClick={() => void bridge.setLanguage(code)}
-                className={`py-1 rounded-md text-[11px] font-bold uppercase transition-colors ${
-                  settings.language === code
-                    ? 'bg-[var(--bg-surface)] text-[var(--accent)] shadow-xs'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                }`}
-              >
-                {code}
-              </button>
-            ))}
+            <div className="flex items-center justify-between gap-1.5">
+              {/* Theme Quick Switch (Light / Dark / System) */}
+              <div className="flex items-center gap-0.5 p-0.5 rounded-full bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
+                {themeOptions.map(({ mode, icon: Icon, title }) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    title={title}
+                    onClick={() => void bridge.updateSettings({ theme: mode })}
+                    className={`p-1.5 rounded-full transition-colors ${
+                      settings.theme === mode
+                        ? 'bg-[var(--bg-glass-pill)] text-[var(--accent)] shadow-xs'
+                        : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                  </button>
+                ))}
+              </div>
+
+              {/* Realtime Language Switcher (VI / EN / JA) */}
+              <div className="flex-1 grid grid-cols-3 gap-0.5 p-0.5 rounded-full bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
+                {(['vi', 'en', 'ja'] as LanguageCode[]).map((code) => (
+                  <button
+                    key={code}
+                    id={`lang-switch-${code}`}
+                    type="button"
+                    onClick={() => void bridge.setLanguage(code)}
+                    className={`py-1 rounded-full text-[10px] font-bold uppercase transition-colors ${
+                      settings.language === code
+                        ? 'bg-[var(--bg-glass-pill)] text-[var(--accent)] shadow-xs'
+                        : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                    }`}
+                  >
+                    {code}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
-      </aside>
+        </aside>
 
-      {/* Main Content Area */}
-      <main className="flex-1 min-w-0 p-5 md:p-7 overflow-y-auto">
-        {activeTab === 'dashboard' && <DashboardView state={state} settings={settings} />}
-        {activeTab === 'tasks' && <TasksPomodoroView state={state} />}
-        {activeTab === 'report' && <DailyReportView settings={settings} />}
-        {activeTab === 'health' && <HealthView state={state} settings={settings} />}
-        {activeTab === 'settings' && <SettingsView settings={settings} />}
-      </main>
+        {/* Main Scrollable Content Pane with Fluid Tab Transition */}
+        <main className="flex-1 min-w-0 min-h-0 overflow-y-auto pr-1">
+          <div key={activeTab} className="animate-fluid-in pb-4">
+            {activeTab === 'dashboard' && (
+              <DashboardView state={state} settings={settings} presets={presets} />
+            )}
+            {activeTab === 'tasks' && (
+              <TasksPomodoroView state={state} presets={presets} />
+            )}
+            {activeTab === 'report' && <DailyReportView settings={settings} />}
+            {activeTab === 'health' && <HealthView state={state} settings={settings} />}
+            {activeTab === 'settings' && (
+              <SettingsView settings={settings} presets={presets} />
+            )}
+          </div>
+        </main>
+      </div>
 
-      {/* In-Browser Preview Overlays (In Electron these open as real OS Always-on-Top frameless windows!) */}
+      {/* Browser Preview Overlays */}
       {!isElectronEnv && settings.stickyWidget.visible && (
-        <StickyWidget state={state} settings={settings} embeddedPreview />
+        <StickyWidget state={state} settings={settings} presets={presets} embeddedPreview />
       )}
       {!isElectronEnv && state.pendingReturnPopup && (
         <ReturnPopup popup={state.pendingReturnPopup} embedded />

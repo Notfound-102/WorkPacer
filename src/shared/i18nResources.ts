@@ -4,26 +4,29 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
   vi: {
     translation: {
       app: {
-        name: 'IdlePulse',
-        tagline: 'Theo dõi thời gian nghỉ, sức khỏe & báo cáo cuối ca',
-        localPrivacy: '100% dữ liệu lưu nội bộ SQLite (Offline & Riêng tư)'
+        name: 'WorkPacer',
+        tagline: 'Nhịp điệu làm việc thông minh, bảo vệ sức khỏe & báo cáo cuối ca',
+        localPrivacy: '100% dữ liệu lưu nội bộ SQLite (Offline & Riêng tư tuyệt đối)'
       },
       nav: {
-        dashboard: 'Tổng quan & Thống kê',
-        tasks: 'Công việc & Pomodoro',
-        report: 'Báo cáo cuối ngày (日報)',
-        health: 'Sức khỏe & Mục tiêu',
+        dashboard: 'Tổng quan',
+        tasks: 'Công việc & Pomo',
+        report: 'Báo cáo (日報)',
+        health: 'Sức khỏe',
         settings: 'Cài đặt',
         stickyWidget: 'Sticky Widget nổi'
       },
       status: {
-        active: 'Đang làm việc (Active)',
-        auto_idle: 'Tự động nghỉ (Auto Idle)',
-        manual_idle: 'Nghỉ chủ động (Manual Idle)',
+        active: 'Đang làm việc',
+        auto_idle: 'Tự động nghỉ',
+        manual_idle: 'Nghỉ chủ động',
+        paused: 'Tạm dừng theo dõi',
         pomodoro_focus: 'Pomodoro Tập trung',
         pomodoro_break: 'Pomodoro Giải lao',
         resumeWork: 'Quay lại làm việc',
-        smartExceptionMedia: 'Ngoại lệ: Đang phát Media toàn màn hình',
+        pauseTracking: 'Tạm dừng',
+        resumeTracking: 'Tiếp tục',
+        smartExceptionMedia: 'Ngoại lệ: Đang xem Media toàn màn hình',
         smartExceptionCall: 'Ngoại lệ: Đang trong cuộc gọi (Mic/Audio)'
       },
       breakTypes: {
@@ -43,7 +46,22 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         other: 'Khác',
         lunchQuick: 'Đi ăn trưa',
         meetingQuick: 'Họp',
-        shortBreakQuick: 'Nghỉ giải lao'
+        shortBreakQuick: 'Nghỉ ngắn'
+      },
+      presets: {
+        title: 'Nút Idle chủ động nhanh',
+        subtitle: 'Tự động xếp theo tần suất sử dụng nhiều nhất lên đầu (tối đa {{max}} nút)',
+        manageBtn: 'Quản lý nút',
+        addBtn: 'Thêm nút mới',
+        saveBtn: 'Lưu',
+        cancelBtn: 'Đóng',
+        editBtn: 'Sửa',
+        deleteBtn: 'Xóa',
+        namePlaceholder: 'Tên trạng thái (VD: Đi pha trà, Họp nhóm)...',
+        limitReached: 'Đã đạt giới hạn tối đa {{max}} nút Idle chủ động. Hãy xóa hoặc sửa nút hiện có.',
+        usageBadge: '{{count}} lần',
+        iconLabel: 'Biểu tượng',
+        categoryLabel: 'Phân loại báo cáo'
       },
       returnPopup: {
         title: 'Chào mừng bạn quay lại!',
@@ -53,7 +71,7 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         save: 'Lưu thẻ'
       },
       dashboard: {
-        title: 'Bảng điều khiển & Phân tích hiệu suất',
+        title: 'Bảng điều khiển & Nhịp độ hiệu suất',
         subtitle: 'Theo dõi tỷ lệ làm việc, dòng thời gian trong ngày và xu hướng nghỉ ngơi',
         activeToday: 'Thời gian Active hôm nay',
         idleToday: 'Thời gian Idle hôm nay',
@@ -84,7 +102,7 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         subtitle: 'Đồng bộ đầu việc thực tế với bộ đếm Active/Idle để tự động lập báo cáo cuối ngày',
         inputPlaceholder: 'Nhập đầu việc đang làm (VD: Review PR #42, Thiết kế API)...',
         startBtn: 'Bắt đầu ghi',
-        stopBtn: 'Kết thúc việc',
+        stopBtn: 'Hoàn thành',
         currentTask: 'Đang thực hiện',
         noActiveTask: 'Chưa gắn đầu việc cụ thể (ghi nhận Active chung)',
         todayTasks: 'Danh sách đầu việc hôm nay',
@@ -101,16 +119,17 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         resetPomo: 'Đặt lại',
         skipPhase: 'Chuyển pha',
         completedCycles: 'Số phiên hoàn thành: {{count}}',
-        manualIdleSection: 'Chế độ rời máy chủ động (Manual Idle)'
+        manualIdleSection: 'Bật nhanh Idle chủ động (Xếp theo tần suất)'
       },
       widget: {
         pinTooltip: 'Ghim luôn nổi trên cùng (Always on Top)',
         unpinTooltip: 'Bỏ ghim trên cùng',
         collapseTooltip: 'Thu gọn / Mở rộng',
-        openMainTooltip: 'Mở cửa sổ chính IdlePulse',
+        openMainTooltip: 'Mở cửa sổ chính WorkPacer',
         closeTooltip: 'Ẩn Sticky Widget',
         quickTaskPlaceholder: 'Ghi nhanh việc đang làm + Enter...',
-        opacity: 'Độ mờ'
+        opacity: 'Độ trong kính',
+        managePresetsTooltip: 'Tùy chỉnh các nút Idle chủ động'
       },
       report: {
         title: 'Báo cáo hằng ngày cuối ca (Daily Report / 日報)',
@@ -138,7 +157,7 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         eyeCareTitle: 'Quy tắc 20-20-20 bảo vệ mắt',
         eyeCareDesc: 'Mỗi {{min}} phút làm việc liên tục, nhắc nhìn xa 20 feet (6 mét) trong 20 giây.',
         nextEyeBreak: 'Đếm ngược lần nghỉ mắt tới',
-        testEyeBreak: 'Mở thử đếm ngược 20s ngay',
+        testEyeBreak: 'Mở màn hình nghỉ mắt 20s ngay',
         sittingTitle: 'Cảnh báo ngồi lâu liên tục',
         sittingDesc: 'Nhắc đứng dậy vươn vai khi Active liên tục vượt ngưỡng {{min}} phút.',
         continuousActive: 'Thời gian ngồi liên tục hiện tại',
@@ -147,15 +166,15 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         dailyGoalTitle: 'Mục tiêu thời gian Active mỗi ngày',
         dailyGoalDesc: 'Thiết lập số giờ tập trung mục tiêu để theo dõi tiến độ trực quan.',
         overlayEyeTitle: 'Nghỉ mắt 20-20-20!',
-        overlayEyeInstruction: 'Hãy nhìn ra xa khoảng 6 mét (20 feet) để thư giãn mắt trong 20 giây.',
+        overlayEyeInstruction: 'Hãy rời mắt khỏi màn hình và nhìn ra xa khoảng 6 mét (20 feet) trong 20 giây để thư giãn điều tiết mắt.',
         overlaySittingTitle: 'Đã đến lúc đứng dậy vận động!',
         overlaySittingInstruction: 'Bạn đã ngồi làm việc liên tục hơn {{min}} phút. Hãy đứng lên vươn vai và uống nước nhé.',
-        snooze5m: 'Nhắc lại sau 5p',
+        snooze5m: 'Nhắc lại sau 5 phút',
         skipBreak: 'Hoàn thành / Đóng'
       },
       settings: {
         title: 'Cài đặt hệ thống & Cá nhân hóa',
-        subtitle: 'Cấu hình thông tin cá nhân, ca làm việc, ngưỡng theo dõi Idle và ngôn ngữ realtime',
+        subtitle: 'Cấu hình giao diện Liquid Glass, nút Idle chủ động, ca làm việc và ngôn ngữ realtime',
         profileShiftSection: 'Thông tin & Ca làm việc (日報)',
         userName: 'Tên người dùng (hiển thị trên báo cáo)',
         shiftStart: 'Giờ bắt đầu ca',
@@ -169,37 +188,38 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         smartFlag: 'Vẫn tính nhưng gắn cờ ngoại lệ riêng',
         smartOff: 'Tắt kiểm tra ngoại lệ',
         autoResumeManual: 'Tự động kết thúc Manual Idle khi dùng chuột/phím lại',
-        languageThemeSection: 'Ngôn ngữ & Giao diện (Realtime)',
+        languageThemeSection: 'Ngôn ngữ & Giao diện Liquid Glass (Realtime)',
         language: 'Ngôn ngữ hiển thị',
         theme: 'Chế độ giao diện',
         themeLight: 'Sáng (Light)',
         themeDark: 'Tối (Dark)',
+        themeSystem: 'Theo hệ thống',
+        reduceTransparency: 'Giảm hiệu ứng trong suốt (Tối ưu hiệu năng GPU)',
+        reduceTransparencyHint: 'Chuyển lớp kính mờ sang bề mặt bán đục nhẹ nhàng khi dùng máy cấu hình thấp hoặc tiết kiệm pin.',
         notificationsSection: 'Thông báo tự động',
         endOfShiftNotif: 'Nhắc tạo Báo cáo cuối ngày (日報) khi hết ca',
         dailySummaryNotif: 'Thông báo tóm tắt hiệu suất cuối ngày',
         weeklySummaryNotif: 'Thông báo tổng kết cuối tuần'
       },
       tray: {
-        openApp: 'Mở IdlePulse',
+        openApp: 'Mở WorkPacer',
         toggleWidget: 'Bật/Tắt Sticky Widget nổi',
         openReport: 'Tạo Báo cáo cuối ngày (日報)',
-        manualLunch: 'Nghỉ chủ động: Đi ăn trưa',
-        manualMeeting: 'Nghỉ chủ động: Họp',
-        manualBreak: 'Nghỉ chủ động: Nghỉ giải lao',
+        pauseTracking: 'Tạm dừng theo dõi',
         resumeWork: 'Quay lại làm việc ngay',
         languageMenu: 'Ngôn ngữ (Language)',
-        quit: 'Thoát IdlePulse'
+        quit: 'Thoát WorkPacer'
       },
       notifications: {
         endOfShiftTitle: 'Đã đến giờ kết thúc ca làm ({{time}})!',
-        endOfShiftBody: 'Nhấn để mở IdlePulse và sao chép Báo cáo cuối ngày (日報) của bạn.',
-        returnWorkTitle: 'Nhắc nhẹ từ IdlePulse',
+        endOfShiftBody: 'Nhấn để mở WorkPacer và sao chép Báo cáo cuối ngày (日報) của bạn.',
+        returnWorkTitle: 'Nhắc nhẹ từ WorkPacer',
         returnWorkBody: 'Bạn đã rời máy {{min}} phút trong khung giờ làm việc. Sẵn sàng quay lại tập trung chưa?',
         sittingTitle: 'Cảnh báo ngồi lâu ({{min}} phút)',
         sittingBody: 'Hãy đứng dậy vươn vai, đi lại 2 phút để bảo vệ cột sống và tuần hoàn máu nhé!',
-        dailySummaryTitle: 'Tóm tắt ngày hôm nay — IdlePulse',
+        dailySummaryTitle: 'Tóm tắt ngày hôm nay — WorkPacer',
         dailySummaryBody: 'Active: {{active}} | Idle: {{idle}} ({{ratio}}% hiệu suất). Hãy kiểm tra báo cáo của bạn!',
-        weeklySummaryTitle: 'Tổng kết tuần — IdlePulse',
+        weeklySummaryTitle: 'Tổng kết tuần — WorkPacer',
         weeklySummaryBody: 'Tuần này bạn đã tập trung {{active}} với tỷ lệ hiệu suất {{ratio}}%.'
       },
       daysShort: ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
@@ -208,25 +228,28 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
   en: {
     translation: {
       app: {
-        name: 'IdlePulse',
-        tagline: 'Smart Idle Tracking, Wellness Guardian & End-of-Day Report',
+        name: 'WorkPacer',
+        tagline: 'Smart Work Rhythm, Wellness Guardian & End-of-Day Report Studio',
         localPrivacy: '100% Local SQLite Storage (Offline & Private)'
       },
       nav: {
-        dashboard: 'Dashboard & Analytics',
-        tasks: 'Tasks & Pomodoro',
-        report: 'Daily Report (日報)',
-        health: 'Wellness & Goals',
+        dashboard: 'Overview',
+        tasks: 'Tasks & Pomo',
+        report: 'Daily Report',
+        health: 'Wellness',
         settings: 'Settings',
-        stickyWidget: 'Floating Sticky Widget'
+        stickyWidget: 'Sticky Widget'
       },
       status: {
         active: 'Working (Active)',
         auto_idle: 'Away (Auto Idle)',
-        manual_idle: 'Paused (Manual Idle)',
+        manual_idle: 'Manual Break',
+        paused: 'Tracking Paused',
         pomodoro_focus: 'Pomodoro Focus',
         pomodoro_break: 'Pomodoro Break',
         resumeWork: 'Resume Working',
+        pauseTracking: 'Pause',
+        resumeTracking: 'Resume',
         smartExceptionMedia: 'Exception: Fullscreen Media Playing',
         smartExceptionCall: 'Exception: Active Call (Mic/Audio)'
       },
@@ -246,8 +269,23 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         sleep: 'Sleep / Nap',
         other: 'Other',
         lunchQuick: 'Lunch Break',
-        meetingQuick: 'In Meeting',
+        meetingQuick: 'Meeting',
         shortBreakQuick: 'Short Break'
+      },
+      presets: {
+        title: 'Quick Manual Idle Buttons',
+        subtitle: 'Automatically sorted by most frequently used first (maximum {{max}} buttons)',
+        manageBtn: 'Manage Buttons',
+        addBtn: 'Add Preset',
+        saveBtn: 'Save',
+        cancelBtn: 'Close',
+        editBtn: 'Edit',
+        deleteBtn: 'Delete',
+        namePlaceholder: 'Status name (e.g. Coffee Run, Standup)...',
+        limitReached: 'Maximum limit of {{max}} Quick Idle buttons reached. Edit or remove an existing button first.',
+        usageBadge: '{{count}} uses',
+        iconLabel: 'Icon',
+        categoryLabel: 'Report Category'
       },
       returnPopup: {
         title: 'Welcome back!',
@@ -257,7 +295,7 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         save: 'Save Tag'
       },
       dashboard: {
-        title: 'Performance & Screen Time Analytics',
+        title: 'Work Pace & Screen Time Analytics',
         subtitle: 'Monitor your active ratio, intraday timeline, and break patterns',
         activeToday: 'Active Time Today',
         idleToday: 'Idle Time Today',
@@ -305,16 +343,17 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         resetPomo: 'Reset',
         skipPhase: 'Skip Phase',
         completedCycles: 'Completed focus sessions: {{count}}',
-        manualIdleSection: 'Quick Manual Idle Status'
+        manualIdleSection: 'Quick Manual Idle (Sorted by Usage)'
       },
       widget: {
         pinTooltip: 'Pin Always-on-Top',
         unpinTooltip: 'Unpin Always-on-Top',
         collapseTooltip: 'Collapse / Expand Widget',
-        openMainTooltip: 'Open IdlePulse Main Window',
+        openMainTooltip: 'Open WorkPacer Main Window',
         closeTooltip: 'Hide Sticky Widget',
         quickTaskPlaceholder: 'Quick task + press Enter...',
-        opacity: 'Opacity'
+        opacity: 'Glass Tint',
+        managePresetsTooltip: 'Customize Quick Idle Buttons'
       },
       report: {
         title: 'End-of-Shift Daily Report (日報)',
@@ -337,12 +376,12 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         savedBadge: 'Auto-saved'
       },
       health: {
-        title: 'Health & Productivity Reminders',
+        title: 'Wellness & Productivity Reminders',
         subtitle: '20-20-20 eye protection, anti-sedentary alerts, and sustainable daily focus goals',
         eyeCareTitle: '20-20-20 Eye Care Rule',
         eyeCareDesc: 'Every {{min}} minutes of active screen time, look 20 feet (6m) away for 20 seconds.',
         nextEyeBreak: 'Next eye break countdown',
-        testEyeBreak: 'Preview 20s Eye Rest Now',
+        testEyeBreak: 'Open Fullscreen 20s Eye Rest',
         sittingTitle: 'Prolonged Sitting Alert',
         sittingDesc: 'Remind you to stand up and stretch after {{min}} minutes of continuous work.',
         continuousActive: 'Current continuous active streak',
@@ -351,15 +390,15 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         dailyGoalTitle: 'Daily Active Time Goal',
         dailyGoalDesc: 'Set your daily target active hours with real-time visual progress tracking.',
         overlayEyeTitle: '20-20-20 Eye Rest!',
-        overlayEyeInstruction: 'Look at an object 20 feet (6 meters) away for 20 seconds to relax eye strain.',
+        overlayEyeInstruction: 'Step your gaze back and look 20 feet (6 meters) away for 20 seconds to relax eye focus.',
         overlaySittingTitle: 'Time to Stand & Stretch!',
         overlaySittingInstruction: 'You have been working continuously for over {{min}} minutes. Stand up and hydrate!',
-        snooze5m: 'Snooze 5m',
+        snooze5m: 'Snooze 5 min',
         skipBreak: 'Done / Dismiss'
       },
       settings: {
-        title: 'System Preferences & Shift Settings',
-        subtitle: 'Configure your profile, shift hours, smart idle thresholds, and live language',
+        title: 'System Preferences & Liquid Glass',
+        subtitle: 'Configure Liquid Glass appearance, Quick Idle buttons, shift hours, and live language',
         profileShiftSection: 'Profile & Work Shift (日報)',
         userName: 'User Name (shown in Daily Report header)',
         shiftStart: 'Shift Start Time',
@@ -373,37 +412,38 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         smartFlag: 'Record idle with exception flag',
         smartOff: 'Disabled',
         autoResumeManual: 'Auto-resume Manual Idle upon mouse/keyboard activity',
-        languageThemeSection: 'Language & Appearance (Realtime)',
+        languageThemeSection: 'Language & Liquid Glass Appearance',
         language: 'Interface Language',
-        theme: 'Color Theme',
+        theme: 'Appearance Mode',
         themeLight: 'Light',
         themeDark: 'Dark',
+        themeSystem: 'System',
+        reduceTransparency: 'Reduce Transparency (GPU Performance Mode)',
+        reduceTransparencyHint: 'Replaces Gaussian glass blur with crisp semi-opaque surfaces to save battery and GPU resources.',
         notificationsSection: 'Automated OS Notifications',
         endOfShiftNotif: 'Remind to submit Daily Report (日報) at shift end',
         dailySummaryNotif: 'Daily end-of-day summary notification',
         weeklySummaryNotif: 'Weekly performance digest notification'
       },
       tray: {
-        openApp: 'Open IdlePulse',
+        openApp: 'Open WorkPacer',
         toggleWidget: 'Toggle Floating Sticky Widget',
         openReport: 'Open Daily Report (日報)',
-        manualLunch: 'Manual Idle: Lunch Break',
-        manualMeeting: 'Manual Idle: In Meeting',
-        manualBreak: 'Manual Idle: Short Break',
+        pauseTracking: 'Pause Tracking',
         resumeWork: 'Resume Working Now',
         languageMenu: 'Language',
-        quit: 'Quit IdlePulse'
+        quit: 'Quit WorkPacer'
       },
       notifications: {
         endOfShiftTitle: 'Shift Ended ({{time}}) — Daily Report Ready!',
-        endOfShiftBody: 'Click to open IdlePulse and copy your Daily Report (日報).',
-        returnWorkTitle: 'Gentle Nudge — IdlePulse',
+        endOfShiftBody: 'Click to open WorkPacer and copy your Daily Report (日報).',
+        returnWorkTitle: 'Gentle Nudge — WorkPacer',
         returnWorkBody: 'You have been away for {{min}} minutes during work hours. Ready to jump back in?',
         sittingTitle: 'Long Sitting Alert ({{min}} min)',
         sittingBody: 'Take 2 minutes to stand up, stretch, and refresh your posture!',
-        dailySummaryTitle: 'Daily Summary — IdlePulse',
+        dailySummaryTitle: 'Daily Summary — WorkPacer',
         dailySummaryBody: 'Active: {{active}} | Idle: {{idle}} ({{ratio}}% focus ratio).',
-        weeklySummaryTitle: 'Weekly Digest — IdlePulse',
+        weeklySummaryTitle: 'Weekly Digest — WorkPacer',
         weeklySummaryBody: 'This week you logged {{active}} active work ({{ratio}}% focus ratio).'
       },
       daysShort: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -412,25 +452,28 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
   ja: {
     translation: {
       app: {
-        name: 'IdlePulse',
-        tagline: '離席計測・健康ケア・日報自動作成デスクトップアプリ',
-        localPrivacy: '100% ローカルSQLite保存（クラウド送信なし・プライバシー保護）'
+        name: 'WorkPacer',
+        tagline: 'スマート稼働ペース計測・健康ケア・日報自動作成アプリ',
+        localPrivacy: '100% ローカルSQLite保存（クラウド送信なし・完全プライバシー保護）'
       },
       nav: {
-        dashboard: 'ダッシュボード・統計',
-        tasks: 'タスク記録・ポモドーロ',
-        report: '日報作成 (Daily Report)',
-        health: '健康ケア・目標',
+        dashboard: '概要・統計',
+        tasks: 'タスク・ポモ',
+        report: '日報作成',
+        health: '健康ケア',
         settings: '設定',
         stickyWidget: '付箋ウィジェット'
       },
       status: {
         active: '作業中 (Active)',
-        auto_idle: '自動離席 (Auto Idle)',
-        manual_idle: '手動離席 (Manual Idle)',
+        auto_idle: '自動離席 (Idle)',
+        manual_idle: '手動休憩中',
+        paused: '計測一時停止中',
         pomodoro_focus: 'ポモドーロ集中',
         pomodoro_break: 'ポモドーロ休憩',
         resumeWork: '作業を再開する',
+        pauseTracking: '一時停止',
+        resumeTracking: '再開',
         smartExceptionMedia: 'スマート例外：全画面メディア再生中',
         smartExceptionCall: 'スマート例外：通話・マイク使用中'
       },
@@ -450,8 +493,23 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         sleep: '仮眠・睡眠',
         other: 'その他',
         lunchQuick: '昼休み',
-        meetingQuick: '会議中',
+        meetingQuick: '会議',
         shortBreakQuick: '小休憩'
+      },
+      presets: {
+        title: 'クイック手動離席ボタン',
+        subtitle: '使用頻度が高い順に自動で並び替えられます（最大{{max}}個）',
+        manageBtn: 'ボタン管理',
+        addBtn: '新規追加',
+        saveBtn: '保存',
+        cancelBtn: '閉じる',
+        editBtn: '編集',
+        deleteBtn: '削除',
+        namePlaceholder: 'ボタン名を入力（例：コーヒー休憩、朝会）...',
+        limitReached: '手動離席ボタンは最大{{max}}個までです。既存のボタンを編集または削除してください。',
+        usageBadge: '{{count}}回',
+        iconLabel: 'アイコン',
+        categoryLabel: '日報カテゴリ'
       },
       returnPopup: {
         title: 'おかえりなさい！',
@@ -461,7 +519,7 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         save: '記録する'
       },
       dashboard: {
-        title: '稼働統計・スクリーンタイム分析',
+        title: 'ワークペース & スクリーンタイム分析',
         subtitle: '作業と離席の比率、1日のタイムライン、時間帯別ヒートマップを可視化',
         activeToday: '本日の作業時間 (Active)',
         idleToday: '本日の離席時間 (Idle)',
@@ -509,16 +567,17 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         resetPomo: 'リセット',
         skipPhase: '次へスキップ',
         completedCycles: '完了セット数: {{count}}',
-        manualIdleSection: '手動離席ステータス切替'
+        manualIdleSection: 'クイック手動離席（頻度順）'
       },
       widget: {
         pinTooltip: '常に最前面に固定 (Always on Top)',
         unpinTooltip: '最前面固定を解除',
         collapseTooltip: '折りたたみ / 展開',
-        openMainTooltip: 'メイン画面を開く',
+        openMainTooltip: 'WorkPacer メイン画面を開く',
         closeTooltip: 'ウィジェットを隠す',
         quickTaskPlaceholder: '作業名を入力してEnter...',
-        opacity: '不透明度'
+        opacity: 'ガラス透明度',
+        managePresetsTooltip: '手動離席ボタンをカスタマイズ'
       },
       report: {
         title: '業務日報作成 (Daily Report / 日報)',
@@ -546,7 +605,7 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         eyeCareTitle: '20-20-20 アイケア（目の休憩）',
         eyeCareDesc: '{{min}}分の作業ごとに、20フィート（約6m）先を20秒間見て目を休めます。',
         nextEyeBreak: '次のアイケアまで',
-        testEyeBreak: '20秒カウントダウンを試す',
+        testEyeBreak: '全画面20秒アイケアを試す',
         sittingTitle: '座りすぎアラート',
         sittingDesc: '連続作業が{{min}}分を超えたら立ち上がってストレッチを促します。',
         continuousActive: '現在の連続作業時間',
@@ -555,15 +614,15 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         dailyGoalTitle: '1日の目標作業時間',
         dailyGoalDesc: '1日の目標アクティブ時間を設定し、達成率をプログレスバーで表示します。',
         overlayEyeTitle: '20-20-20 アイケア休憩！',
-        overlayEyeInstruction: '約6メートル（20フィート）離れた場所を20秒間見つめて目を休めましょう。',
+        overlayEyeInstruction: '画面から目を離し、約6メートル（20フィート）先を20秒間見つめて目を休めましょう。',
         overlaySittingTitle: '立ち上がってリフレッシュしましょう！',
         overlaySittingInstruction: '{{min}}分以上連続で作業しています。背伸びや水分補給をしましょう。',
         snooze5m: '5分後に再通知',
         skipBreak: '完了 / 閉じる'
       },
       settings: {
-        title: 'システム設定・カスタマイズ',
-        subtitle: 'ユーザー名、勤務シフト、アイドル検知しきい値、言語をリアルタイム設定',
+        title: 'システム設定 & Liquid Glass 外観',
+        subtitle: 'Liquid Glass デザイン、手動離席ボタン、勤務シフト、表示言語をリアルタイム設定',
         profileShiftSection: 'プロフィール & 勤務シフト (日報)',
         userName: 'ユーザー名（日報ヘッダーに表示）',
         shiftStart: '始業時刻',
@@ -577,37 +636,38 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         smartFlag: '例外フラグ付きで記録する',
         smartOff: '無効',
         autoResumeManual: 'マウス/キーボード操作で手動離席を自動解除する',
-        languageThemeSection: '表示言語 & テーマ（再起動不要）',
+        languageThemeSection: '表示言語 & Liquid Glass テーマ（即時反映）',
         language: '表示言語 (Language)',
-        theme: 'テーマ',
-        themeLight: 'ライト (Light)',
-        themeDark: 'ダーク (Dark)',
+        theme: '外観モード',
+        themeLight: 'ライト',
+        themeDark: 'ダーク',
+        themeSystem: 'システム連動',
+        reduceTransparency: '透明度を下げる（GPUパフォーマンス優先）',
+        reduceTransparencyHint: 'ガラスのぼかし効果を抑え、省電力で軽快な半不透明サーフェスに切り替えます。',
         notificationsSection: '自動OS通知',
         endOfShiftNotif: '終業時刻に日報作成リマインダーを通知',
         dailySummaryNotif: '1日の終わりに稼働サマリーを通知',
         weeklySummaryNotif: '週末に週間レポートを通知'
       },
       tray: {
-        openApp: 'IdlePulse を開く',
+        openApp: 'WorkPacer を開く',
         toggleWidget: '付箋ウィジェットの表示切替',
         openReport: '日報作成画面を開く (日報)',
-        manualLunch: '手動離席：昼休み',
-        manualMeeting: '手動離席：会議中',
-        manualBreak: '手動離席：小休憩',
+        pauseTracking: '計測を一時停止',
         resumeWork: '作業を再開する',
         languageMenu: '言語切替 (Language)',
-        quit: 'IdlePulse を終了'
+        quit: 'WorkPacer を終了'
       },
       notifications: {
         endOfShiftTitle: '終業時刻 ({{time}}) です — 日報を作成しましょう',
-        endOfShiftBody: 'クリックして IdlePulse を開き、本日の日報をコピーできます。',
-        returnWorkTitle: 'IdlePulse リマインダー',
+        endOfShiftBody: 'クリックして WorkPacer を開き、本日の日報をコピーできます。',
+        returnWorkTitle: 'WorkPacer リマインダー',
         returnWorkBody: '勤務時間中に{{min}}分間離席しています。作業を再開しますか？',
         sittingTitle: '座りすぎアラート ({{min}}分経過)',
         sittingBody: '少し立ち上がってストレッチや水分補給をしましょう！',
-        dailySummaryTitle: '本日の稼働サマリー — IdlePulse',
+        dailySummaryTitle: '本日の稼働サマリー — WorkPacer',
         dailySummaryBody: '作業: {{active}} | 離席: {{idle}} (稼働率 {{ratio}}%)。',
-        weeklySummaryTitle: '週間サマリー — IdlePulse',
+        weeklySummaryTitle: '週間サマリー — WorkPacer',
         weeklySummaryBody: '今週の合計作業時間は {{active}}（稼働率 {{ratio}}%）でした。'
       },
       daysShort: ['日', '月', '火', '水', '木', '金', '土']

@@ -4,38 +4,53 @@ import {
   Bell,
   Cpu,
   Globe,
+  Monitor,
   Moon,
   ShieldCheck,
+  Sparkles,
   Sun,
   UserCheck
 } from 'lucide-react'
-import { AppSettings, LanguageCode, SmartExceptionMode } from '@shared/types'
+import {
+  AppSettings,
+  LanguageCode,
+  QuickIdlePreset,
+  SmartExceptionMode,
+  ThemeMode
+} from '@shared/types'
 import { bridge } from '../lib/bridge'
+import { WorkPacerLogo } from './WorkPacerLogo'
+import { QuickPresetsManager } from './QuickPresetsManager'
 
 interface SettingsViewProps {
   settings: AppSettings
+  presets: QuickIdlePreset[]
 }
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ settings }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ settings, presets }) => {
   const { t } = useTranslation()
 
   return (
     <div className="space-y-5 max-w-4xl">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight">{t('settings.title')}</h1>
-        <p className="text-sm text-[var(--text-secondary)] mt-0.5">{t('settings.subtitle')}</p>
+      {/* Brand & Title Header */}
+      <div className="flex items-center gap-3.5">
+        <WorkPacerLogo size={42} />
+        <div>
+          <h1 className="text-xl font-bold tracking-tight">{t('settings.title')}</h1>
+          <p className="text-sm text-[var(--text-secondary)] mt-0.5">{t('settings.subtitle')}</p>
+        </div>
       </div>
 
-      {/* 1. Realtime Language & Theme */}
+      {/* 1. Realtime Language, Liquid Glass Appearance & Reduce Transparency */}
       <div className="card-surface p-5 space-y-4">
         <div className="flex items-center gap-2">
           <Globe className="w-4 h-4 text-[var(--accent)]" />
-          <h2 className="text-sm font-semibold">{t('settings.languageThemeSection')}</h2>
+          <h2 className="text-sm font-bold">{t('settings.languageThemeSection')}</h2>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-[var(--text-secondary)]">
+            <label className="text-xs font-semibold text-[var(--text-secondary)]">
               {t('settings.language')}
             </label>
             <div className="grid grid-cols-3 gap-2">
@@ -50,7 +65,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings }) => {
                   key={lang.code}
                   type="button"
                   onClick={() => void bridge.setLanguage(lang.code)}
-                  className={`py-2 px-2.5 rounded-lg text-xs font-semibold border transition-colors ${
+                  className={`py-2 px-2.5 rounded-full text-xs font-semibold border transition-colors ${
                     settings.language === lang.code
                       ? 'bg-[var(--accent-soft)] border-[var(--accent)] text-[var(--accent)]'
                       : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)] text-[var(--text-secondary)]'
@@ -63,49 +78,73 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings }) => {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-[var(--text-secondary)]">
+            <label className="text-xs font-semibold text-[var(--text-secondary)]">
               {t('settings.theme')}
             </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => void bridge.updateSettings({ theme: 'light' })}
-                className={`py-2 px-3 rounded-lg text-xs font-semibold border flex items-center justify-center gap-1.5 ${
-                  settings.theme === 'light'
-                    ? 'bg-[var(--accent-soft)] border-[var(--accent)] text-[var(--accent)]'
-                    : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)] text-[var(--text-secondary)]'
-                }`}
-              >
-                <Sun className="w-3.5 h-3.5" />
-                {t('settings.themeLight')}
-              </button>
-              <button
-                type="button"
-                onClick={() => void bridge.updateSettings({ theme: 'dark' })}
-                className={`py-2 px-3 rounded-lg text-xs font-semibold border flex items-center justify-center gap-1.5 ${
-                  settings.theme === 'dark'
-                    ? 'bg-[var(--accent-soft)] border-[var(--accent)] text-[var(--accent)]'
-                    : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)] text-[var(--text-secondary)]'
-                }`}
-              >
-                <Moon className="w-3.5 h-3.5" />
-                {t('settings.themeDark')}
-              </button>
+            <div className="grid grid-cols-3 gap-2">
+              {(
+                [
+                  { mode: 'light', label: t('settings.themeLight'), icon: Sun },
+                  { mode: 'dark', label: t('settings.themeDark'), icon: Moon },
+                  { mode: 'system', label: t('settings.themeSystem'), icon: Monitor }
+                ] as { mode: ThemeMode; label: string; icon: React.FC<{ className?: string }> }[]
+              ).map(({ mode, label, icon: Icon }) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => void bridge.updateSettings({ theme: mode })}
+                  className={`py-2 px-2.5 rounded-full text-xs font-semibold border flex items-center justify-center gap-1.5 transition-colors ${
+                    settings.theme === mode
+                      ? 'bg-[var(--accent-soft)] border-[var(--accent)] text-[var(--accent)]'
+                      : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)] text-[var(--text-secondary)]'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{label}</span>
+                </button>
+              ))}
             </div>
           </div>
         </div>
+
+        {/* GPU Performance Switch: Reduce Transparency */}
+        <div className="pt-2 border-t border-[var(--border-subtle)] flex items-start justify-between gap-4">
+          <div className="space-y-0.5">
+            <div className="text-xs font-semibold flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" />
+              <span>{t('settings.reduceTransparency')}</span>
+            </div>
+            <p className="text-xs text-[var(--text-muted)]">
+              {t('settings.reduceTransparencyHint')}
+            </p>
+          </div>
+          <input
+            id="settings-reduce-transparency-toggle"
+            type="checkbox"
+            checked={settings.reduceTransparency}
+            onChange={(e) =>
+              void bridge.updateSettings({ reduceTransparency: e.target.checked })
+            }
+            className="w-4 h-4 accent-[var(--accent)] mt-1 shrink-0 cursor-pointer"
+          />
+        </div>
       </div>
 
-      {/* 2. Profile & Work Shift (日報) */}
+      {/* 2. Quick Manual Idle Presets Manager (Max 6, Auto-Sorted by Usage) */}
+      <div className="card-surface p-5">
+        <QuickPresetsManager presets={presets} />
+      </div>
+
+      {/* 3. Profile & Work Shift (日報) */}
       <div className="card-surface p-5 space-y-4">
         <div className="flex items-center gap-2">
           <UserCheck className="w-4 h-4 text-[var(--accent)]" />
-          <h2 className="text-sm font-semibold">{t('settings.profileShiftSection')}</h2>
+          <h2 className="text-sm font-bold">{t('settings.profileShiftSection')}</h2>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <label className="space-y-1 sm:col-span-1">
-            <span className="text-xs font-medium text-[var(--text-secondary)]">
+            <span className="text-xs font-semibold text-[var(--text-secondary)]">
               {t('settings.userName')}
             </span>
             <input
@@ -118,7 +157,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings }) => {
           </label>
 
           <label className="space-y-1">
-            <span className="text-xs font-medium text-[var(--text-secondary)]">
+            <span className="text-xs font-semibold text-[var(--text-secondary)]">
               {t('settings.shiftStart')}
             </span>
             <input
@@ -130,7 +169,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings }) => {
           </label>
 
           <label className="space-y-1">
-            <span className="text-xs font-medium text-[var(--text-secondary)]">
+            <span className="text-xs font-semibold text-[var(--text-secondary)]">
               {t('settings.shiftEnd')}
             </span>
             <input
@@ -143,34 +182,34 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings }) => {
         </div>
 
         <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--text-secondary)]">
-          <span className="font-medium">{t('settings.lunchWindow')}:</span>
+          <span className="font-semibold">{t('settings.lunchWindow')}:</span>
           <input
             type="time"
             value={settings.lunchStart}
             onChange={(e) => void bridge.updateSettings({ lunchStart: e.target.value })}
-            className="input-control !py-1 !px-2 font-mono !text-xs"
+            className="input-control !py-1 !px-2.5 font-mono !text-xs"
           />
           <span>~</span>
           <input
             type="time"
             value={settings.lunchEnd}
             onChange={(e) => void bridge.updateSettings({ lunchEnd: e.target.value })}
-            className="input-control !py-1 !px-2 font-mono !text-xs"
+            className="input-control !py-1 !px-2.5 font-mono !text-xs"
           />
         </div>
       </div>
 
-      {/* 3. Core Idle Tracking & Smart Exceptions */}
+      {/* 4. Core Idle Tracking & Smart Exceptions */}
       <div className="card-surface p-5 space-y-4">
         <div className="flex items-center gap-2">
           <Cpu className="w-4 h-4 text-[var(--accent)]" />
-          <h2 className="text-sm font-semibold">{t('settings.trackingSection')}</h2>
+          <h2 className="text-sm font-bold">{t('settings.trackingSection')}</h2>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <div className="flex justify-between text-xs">
-              <span className="font-medium text-[var(--text-secondary)]">
+              <span className="font-semibold text-[var(--text-secondary)]">
                 {t('settings.idleThreshold')}
               </span>
               <span className="font-mono font-bold text-[var(--accent)]">
@@ -192,7 +231,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings }) => {
 
           <div className="space-y-1.5">
             <div className="flex justify-between text-xs">
-              <span className="font-medium text-[var(--text-secondary)]">
+              <span className="font-semibold text-[var(--text-secondary)]">
                 {t('settings.returnPopupThreshold')}
               </span>
               <span className="font-mono font-bold text-[var(--accent)]">
@@ -214,7 +253,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings }) => {
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-[var(--text-secondary)] block">
+          <label className="text-xs font-semibold text-[var(--text-secondary)] block">
             {t('settings.smartExceptions')}
           </label>
           <select
@@ -232,7 +271,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings }) => {
           </select>
         </div>
 
-        <label className="flex items-center gap-2 text-xs cursor-pointer">
+        <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
           <input
             type="checkbox"
             checked={settings.autoResumeManualIdle}
@@ -245,14 +284,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings }) => {
         </label>
       </div>
 
-      {/* 4. Automated Notifications & Local SQLite Privacy */}
+      {/* 5. Automated Notifications & Local SQLite Privacy */}
       <div className="card-surface p-5 space-y-3">
         <div className="flex items-center gap-2">
           <Bell className="w-4 h-4 text-[var(--accent)]" />
-          <h2 className="text-sm font-semibold">{t('settings.notificationsSection')}</h2>
+          <h2 className="text-sm font-bold">{t('settings.notificationsSection')}</h2>
         </div>
 
-        <div className="space-y-2 text-xs">
+        <div className="space-y-2 text-xs font-medium">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"

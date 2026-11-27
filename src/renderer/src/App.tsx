@@ -17,7 +17,7 @@ function parseWindowRoute(): WindowRoute {
 
 export const App: React.FC = () => {
   const [route, setRoute] = useState<WindowRoute>(parseWindowRoute)
-  const { state, settings, activeTab, setActiveTab } = useIdlePulse()
+  const { state, settings, quickIdlePresets, activeTab, setActiveTab } = useIdlePulse()
 
   useEffect(() => {
     const onHash = (): void => setRoute(parseWindowRoute())
@@ -35,14 +35,14 @@ export const App: React.FC = () => {
 
   if (!state) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-[var(--bg-app)] text-xs text-[var(--text-muted)]">
-        Loading IdlePulse...
+      <div className="h-screen w-screen flex items-center justify-center ambient-mesh-bg text-xs text-[var(--text-muted)]">
+        Loading WorkPacer...
       </div>
     )
   }
 
   if (route === 'widget') {
-    return <StickyWidget state={state} settings={settings} />
+    return <StickyWidget state={state} settings={settings} presets={quickIdlePresets} />
   }
 
   if (route === 'return-popup') {
@@ -67,6 +67,7 @@ export const App: React.FC = () => {
     <MainWindow
       state={state}
       settings={settings}
+      presets={quickIdlePresets}
       activeTab={activeTab}
       onSelectTab={setActiveTab}
     />

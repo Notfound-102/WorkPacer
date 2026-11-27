@@ -1,7 +1,8 @@
-import { IdlePulseAPI } from '../shared/types'
+import { WorkPacerAPI } from '../shared/types'
 
 declare global {
   interface Window {
-    idlePulse?: IdlePulseAPI
+    workPacer?: WorkPacerAPI
+    idlePulse?: WorkPacerAPI
   }
 }

@@ -1,22 +1,24 @@
 {
-  "name": "idle-pulse",
-  "version": "1.0.0",
-  "description": "IdlePulse — Smart Cross-Platform Desktop Idle Tracker, Health Guardian, Sticky Widget & Daily Report (日報) Generator",
+  "name": "workpacer",
+  "productName": "WorkPacer",
+  "version": "1.1.0",
+  "description": "WorkPacer — Liquid Glass Cross-Platform Desktop Pace & Idle Tracker, Wellness Guardian, Sticky Widget & Daily Report (日報) Studio",
   "main": "./out/main/index.js",
-  "author": "IdlePulse Engineering",
+  "author": "WorkPacer Engineering",
   "license": "MIT",
   "scripts": {
     "dev": "electron-vite dev",
     "dev:web": "vite --config vite.web.config.ts --host 127.0.0.1 --port 5173",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
+    "generate:icons": "node scripts/generate-icons.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
     "rebuild:electron": "electron-builder install-app-deps",
     "pack": "npm run build && electron-builder --dir",
-    "dist:win": "npm run build && electron-builder --win",
-    "dist:mac": "npm run build && electron-builder --mac",
-    "dist:linux": "npm run build && electron-builder --linux"
+    "dist:win": "npm run generate:icons && npm run build && electron-builder --win",
+    "dist:mac": "npm run generate:icons && npm run build && electron-builder --mac",
+    "dist:linux": "npm run generate:icons && npm run build && electron-builder --linux"
   },
   "dependencies": {
     "better-sqlite3": "^13.2.0",
