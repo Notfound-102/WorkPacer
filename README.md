@@ -11,5 +11,3 @@
 - **Tùy chỉnh tiêu đề báo cáo & Kiểm tra cập nhật:**
   - Cho phép đặt tiêu đề báo cáo tùy ý trong Cài đặt (mặc định: `Daily Report`).
   - Tích hợp **Check for Update** qua GitHub Releases API (`Notfound-102/WorkPacer`) tự động khi mở app và kiểm tra thủ công trong Cài đặt.
-
-## Lệnh chạy & Đóng gói
