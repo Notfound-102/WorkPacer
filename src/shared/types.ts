@@ -56,6 +56,7 @@ export interface TaskRecord {
 
 export type PomodoroPreset = '25_5' | '50_10' | 'custom'
 export type PomodoroPhase = 'idle' | 'focus' | 'break'
+export type PomodoroClockStyle = 'analog' | 'digital' | 'ring'
 
 export interface PomodoroState {
   running: boolean
@@ -85,6 +86,17 @@ export interface StickyWidgetPrefs {
   height?: number
 }
 
+export interface PomodoroWidgetPrefs {
+  visible: boolean
+  alwaysOnTop: boolean
+  opacity: number
+  clockStyle: PomodoroClockStyle
+  x?: number
+  y?: number
+  width?: number
+  height?: number
+}
+
 export interface WindowBoundsPrefs {
   x?: number
   y?: number
@@ -92,11 +104,24 @@ export interface WindowBoundsPrefs {
   height?: number
 }
 
+export interface UpdateCheckResult {
+  checkedAt: number
+  currentVersion: string
+  latestVersion: string | null
+  hasUpdate: boolean
+  releaseUrl: string
+  releaseName?: string
+  publishedAt?: string
+  releaseNotes?: string
+  error?: string
+}
+
 export interface AppSettings {
   language: LanguageCode
   theme: ThemeMode
   reduceTransparency: boolean
   userName: string
+  reportTitle: string // default "Daily Report"
   shiftStart: string // "08:30"
   shiftEnd: string // "17:30"
   lunchStart: string // "12:00"
@@ -117,7 +142,9 @@ export interface AppSettings {
   dailySummaryNotification: boolean
   weeklySummaryNotification: boolean
   endOfShiftNotification: boolean
+  autoCheckUpdates: boolean
   stickyWidget: StickyWidgetPrefs
+  pomodoroWidget: PomodoroWidgetPrefs
   returnPopupBounds?: WindowBoundsPrefs
 }
 
@@ -226,6 +253,8 @@ export interface WorkPacerAPI {
   onStateUpdate: (cb: (state: LiveTrackingState) => void) => () => void
   onSettingsUpdate: (cb: (settings: AppSettings) => void) => () => void
   onPresetsUpdate: (cb: (presets: QuickIdlePreset[]) => void) => () => void
+  onTimelineChanged: (cb: () => void) => () => void
+  onUpdateStatus: (cb: (result: UpdateCheckResult) => void) => () => void
   onNavigateTab: (cb: (tab: MainTabId) => void) => () => void
 
   // Settings & Language
@@ -263,7 +292,7 @@ export interface WorkPacerAPI {
   ) => Promise<void>
   deleteTask: (id: number) => Promise<void>
 
-  // Pomodoro
+  // Pomodoro & Floating Pomodoro Widget
   startPomodoro: (
     preset?: PomodoroPreset,
     customFocus?: number,
@@ -272,6 +301,8 @@ export interface WorkPacerAPI {
   pausePomodoro: () => Promise<void>
   resetPomodoro: () => Promise<void>
   skipPomodoroPhase: () => Promise<void>
+  togglePomodoroWidget: (visible?: boolean) => Promise<AppSettings>
+  updatePomodoroWidgetPrefs: (prefs: Partial<PomodoroWidgetPrefs>) => Promise<AppSettings>
 
   // Health & Break Overlay
   triggerEyeBreakNow: () => Promise<void>
@@ -287,9 +318,14 @@ export interface WorkPacerAPI {
   exportData: (format: 'csv' | 'json', startDate: string, endDate: string) => Promise<ExportResult>
   sendSummaryNotificationNow: (period: 'daily' | 'weekly') => Promise<void>
 
-  // Daily Report (日報)
+  // Daily Report
   getDailyReport: (dateStr: string, forceRegenerate?: boolean) => Promise<DailyReportDocument>
   saveDailyReport: (doc: DailyReportDocument) => Promise<DailyReportDocument>
+
+  // Updates & External Links
+  getAppVersion: () => Promise<string>
+  checkForUpdates: () => Promise<UpdateCheckResult>
+  openExternalUrl: (url: string) => Promise<void>
 }
 
 export type IdlePulseAPI = WorkPacerAPI
@@ -299,6 +335,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'light',
   reduceTransparency: false,
   userName: 'Nguyen Van A',
+  reportTitle: 'Daily Report',
   shiftStart: '08:30',
   shiftEnd: '17:30',
   lunchStart: '12:00',
@@ -319,13 +356,22 @@ export const DEFAULT_SETTINGS: AppSettings = {
   dailySummaryNotification: true,
   weeklySummaryNotification: true,
   endOfShiftNotification: true,
+  autoCheckUpdates: true,
   stickyWidget: {
     visible: false,
     alwaysOnTop: true,
     collapsed: false,
     opacity: 0.88,
-    width: 332,
-    height: 304
+    width: 344,
+    height: 316
+  },
+  pomodoroWidget: {
+    visible: false,
+    alwaysOnTop: true,
+    opacity: 0.9,
+    clockStyle: 'ring',
+    width: 276,
+    height: 308
   }
 }
 

@@ -11,10 +11,11 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
       nav: {
         dashboard: 'Tổng quan',
         tasks: 'Công việc & Pomo',
-        report: 'Báo cáo (日報)',
+        report: 'Báo cáo',
         health: 'Sức khỏe',
         settings: 'Cài đặt',
-        stickyWidget: 'Sticky Widget nổi'
+        stickyWidget: 'Ghim ra màn hình',
+        pomodoroWidget: 'Ghim Pomodoro nổi'
       },
       status: {
         active: 'Đang làm việc',
@@ -58,7 +59,8 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         editBtn: 'Sửa',
         deleteBtn: 'Xóa',
         namePlaceholder: 'Tên trạng thái (VD: Đi pha trà, Họp nhóm)...',
-        limitReached: 'Đã đạt giới hạn tối đa {{max}} nút Idle chủ động. Hãy xóa hoặc sửa nút hiện có.',
+        limitReached:
+          'Đã đạt giới hạn tối đa {{max}} nút Idle chủ động. Hãy xóa hoặc sửa nút hiện có.',
         usageBadge: '{{count}} lần',
         iconLabel: 'Biểu tượng',
         categoryLabel: 'Phân loại báo cáo'
@@ -66,9 +68,9 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
       returnPopup: {
         title: 'Chào mừng bạn quay lại!',
         prompt: 'Bạn vừa rời máy {{minutes}} phút. Bạn vừa làm gì?',
-        notePlaceholder: 'Ghi chú thêm (tùy chọn)...',
+        notePlaceholder: 'Nhập lý do hoặc ghi chú chi tiết...',
         skip: 'Bỏ qua',
-        save: 'Lưu thẻ'
+        save: 'Lưu vào Timeline'
       },
       dashboard: {
         title: 'Bảng điều khiển & Nhịp độ hiệu suất',
@@ -106,9 +108,15 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         currentTask: 'Đang thực hiện',
         noActiveTask: 'Chưa gắn đầu việc cụ thể (ghi nhận Active chung)',
         todayTasks: 'Danh sách đầu việc hôm nay',
-        emptyTasks: 'Chưa có đầu việc nào hôm nay. Hãy nhập ở trên hoặc trên Sticky Widget.',
+        emptyTasks: 'Chưa có đầu việc nào hôm nay. Hãy nhập ở trên hoặc trên cửa sổ ghim nổi.',
         delete: 'Xóa',
         pomodoroTitle: 'Pomodoro tích hợp',
+        pinPomodoroBtn: 'Ghim Pomodoro nổi',
+        unpinPomodoroBtn: 'Đóng Pomodoro nổi',
+        clockStyleLabel: 'Kiểu đồng hồ Pomodoro',
+        styleAnalog: 'Đồng hồ kim',
+        styleDigital: 'Đồng hồ số',
+        styleRing: 'Vòng đếm ngược',
         preset25: '25 / 5 phút',
         preset50: '50 / 10 phút',
         presetCustom: 'Tùy chỉnh',
@@ -126,14 +134,15 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         unpinTooltip: 'Bỏ ghim trên cùng',
         collapseTooltip: 'Thu gọn / Mở rộng',
         openMainTooltip: 'Mở cửa sổ chính WorkPacer',
-        closeTooltip: 'Ẩn Sticky Widget',
+        closeTooltip: 'Ẩn cửa sổ nổi',
         quickTaskPlaceholder: 'Ghi nhanh việc đang làm + Enter...',
-        opacity: 'Độ trong kính',
-        managePresetsTooltip: 'Tùy chỉnh các nút Idle chủ động'
+        opacity: 'Độ trong suốt',
+        managePresetsTooltip: 'Tùy chỉnh các nút Idle chủ động',
+        switchClockStyleTooltip: 'Đổi kiểu hiển thị đồng hồ'
       },
       report: {
-        title: 'Báo cáo hằng ngày cuối ca (Daily Report / 日報)',
-        subtitle: 'Tự động tổng hợp công việc trong ngày, chỉnh sửa trực quan và xuất định dạng chuẩn Tab',
+        title: 'Báo cáo hằng ngày cuối ca',
+        subtitle: 'Tự động tổng hợp công việc trong ngày, kéo thả chỉnh sửa và xuất báo cáo nhanh',
         reportDate: 'Ngày báo cáo',
         shiftWindow: 'Ca làm việc trong ngày',
         hideLunch: 'Ẩn giờ nghỉ trưa ({{start}}–{{end}})',
@@ -144,8 +153,11 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         colStart: 'Bắt đầu',
         colEnd: 'Kết thúc',
         colContent: 'Nội dung công việc (làm gì)',
-        previewTitle: 'Bản xem trước chuẩn Plain-Text (Tab \\t)',
-        previewHint: 'Định dạng dùng ký tự Tab (\\t) chuẩn để dán vào Chatwork, Slack, Teams hoặc Email',
+        dragHint: 'Kéo biểu tượng chấm để đổi vị trí',
+        dragTimeViolation:
+          'Không thể đặt công việc có giờ muộn hơn đứng trước công việc sớm hơn. Vui lòng sửa lại giờ trước khi kéo đổi vị trí.',
+        previewTitle: 'Bản xem trước chuẩn Plain-Text',
+        previewHint: 'Định dạng căn chỉnh chuẩn để dán đẹp vào Chatwork, Slack, Teams hoặc Email',
         copyBtn: 'Sao chép báo cáo (Copy)',
         copiedBtn: 'Đã sao chép vào Clipboard!',
         defaultWork: 'Xử lý công việc chuyên môn',
@@ -162,27 +174,34 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         sittingDesc: 'Nhắc đứng dậy vươn vai khi Active liên tục vượt ngưỡng {{min}} phút.',
         continuousActive: 'Thời gian ngồi liên tục hiện tại',
         returnWorkTitle: 'Nhắc quay lại làm việc trong ca',
-        returnWorkDesc: 'Gửi thông báo nhẹ nếu rời máy quá {{min}} phút trong giờ làm việc (trừ giờ trưa & họp).',
+        returnWorkDesc:
+          'Gửi thông báo nhẹ nếu rời máy quá {{min}} phút trong giờ làm việc (trừ giờ trưa & họp).',
         dailyGoalTitle: 'Mục tiêu thời gian Active mỗi ngày',
         dailyGoalDesc: 'Thiết lập số giờ tập trung mục tiêu để theo dõi tiến độ trực quan.',
         overlayEyeTitle: 'Nghỉ mắt 20-20-20!',
-        overlayEyeInstruction: 'Hãy rời mắt khỏi màn hình và nhìn ra xa khoảng 6 mét (20 feet) trong 20 giây để thư giãn điều tiết mắt.',
+        overlayEyeInstruction:
+          'Hãy rời mắt khỏi màn hình và nhìn ra xa khoảng 6 mét (20 feet) trong 20 giây để thư giãn điều tiết mắt.',
         overlaySittingTitle: 'Đã đến lúc đứng dậy vận động!',
-        overlaySittingInstruction: 'Bạn đã ngồi làm việc liên tục hơn {{min}} phút. Hãy đứng lên vươn vai và uống nước nhé.',
+        overlaySittingInstruction:
+          'Bạn đã ngồi làm việc liên tục hơn {{min}} phút. Hãy đứng lên vươn vai và uống nước nhé.',
         snooze5m: 'Nhắc lại sau 5 phút',
         skipBreak: 'Hoàn thành / Đóng'
       },
       settings: {
         title: 'Cài đặt hệ thống & Cá nhân hóa',
-        subtitle: 'Cấu hình giao diện Liquid Glass, nút Idle chủ động, ca làm việc và ngôn ngữ realtime',
-        profileShiftSection: 'Thông tin & Ca làm việc (日報)',
+        subtitle: 'Cấu hình giao diện Liquid Glass, báo cáo, Pomodoro nổi và kiểm tra cập nhật',
+        profileShiftSection: 'Thông tin, Ca làm việc & Tiêu đề báo cáo',
         userName: 'Tên người dùng (hiển thị trên báo cáo)',
+        reportTitle: 'Tiêu đề báo cáo cuối ngày',
+        reportTitlePlaceholder: 'Ví dụ: Daily Report',
         shiftStart: 'Giờ bắt đầu ca',
         shiftEnd: 'Giờ kết thúc ca',
         lunchWindow: 'Khung giờ nghỉ trưa',
+        pomodoroSection: 'Cài đặt cửa sổ Pomodoro nổi',
+        pomodoroStyleDesc: 'Đồng bộ kiểu hiển thị giữa trang Pomodoro và cửa sổ Pomodoro ghim nổi',
         trackingSection: 'Cơ chế theo dõi Idle thông minh',
         idleThreshold: 'Ngưỡng bắt đầu tính Idle (1–15 phút)',
-        returnPopupThreshold: 'Hiện Quick Tag Popup khi nghỉ trên (phút)',
+        returnPopupThreshold: 'Hiện cửa sổ nhập lý do khi nghỉ trên (phút)',
         smartExceptions: 'Ngoại lệ thông minh (Xem video Fullscreen / Đang gọi Mic)',
         smartIgnore: 'Bỏ qua không tính Idle (Giữ trạng thái Active)',
         smartFlag: 'Vẫn tính nhưng gắn cờ ngoại lệ riêng',
@@ -195,16 +214,27 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         themeDark: 'Tối (Dark)',
         themeSystem: 'Theo hệ thống',
         reduceTransparency: 'Giảm hiệu ứng trong suốt (Tối ưu hiệu năng GPU)',
-        reduceTransparencyHint: 'Chuyển lớp kính mờ sang bề mặt bán đục nhẹ nhàng khi dùng máy cấu hình thấp hoặc tiết kiệm pin.',
+        reduceTransparencyHint:
+          'Chuyển lớp kính mờ sang bề mặt bán đục nhẹ nhàng khi dùng máy cấu hình thấp hoặc tiết kiệm pin.',
         notificationsSection: 'Thông báo tự động',
-        endOfShiftNotif: 'Nhắc tạo Báo cáo cuối ngày (日報) khi hết ca',
+        endOfShiftNotif: 'Nhắc tạo Báo cáo cuối ngày khi hết ca',
         dailySummaryNotif: 'Thông báo tóm tắt hiệu suất cuối ngày',
-        weeklySummaryNotif: 'Thông báo tổng kết cuối tuần'
+        weeklySummaryNotif: 'Thông báo tổng kết cuối tuần',
+        updateSection: 'Phiên bản & Kiểm tra cập nhật',
+        currentVersion: 'Phiên bản hiện tại: v{{version}}',
+        autoCheckUpdates: 'Tự động kiểm tra bản cập nhật mới khi mở ứng dụng',
+        checkForUpdateBtn: 'Kiểm tra cập nhật (Check for Update)',
+        checkingUpdate: 'Đang kiểm tra...',
+        upToDate: 'Bạn đang sử dụng phiên bản mới nhất (v{{version}}).',
+        updateAvailable: 'Đã có phiên bản mới {{latest}} (hiện tại: v{{current}})!',
+        downloadUpdateBtn: 'Mở trang tải bản mới',
+        updateCheckError: 'Không thể kết nối máy chủ GitHub Releases. Vui lòng thử lại sau.'
       },
       tray: {
         openApp: 'Mở WorkPacer',
-        toggleWidget: 'Bật/Tắt Sticky Widget nổi',
-        openReport: 'Tạo Báo cáo cuối ngày (日報)',
+        toggleWidget: 'Ghim / Ẩn Widget ngoài màn hình',
+        togglePomodoroWidget: 'Ghim / Ẩn Pomodoro nổi',
+        openReport: 'Tạo Báo cáo cuối ngày',
         pauseTracking: 'Tạm dừng theo dõi',
         resumeWork: 'Quay lại làm việc ngay',
         languageMenu: 'Ngôn ngữ (Language)',
@@ -212,15 +242,19 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
       },
       notifications: {
         endOfShiftTitle: 'Đã đến giờ kết thúc ca làm ({{time}})!',
-        endOfShiftBody: 'Nhấn để mở WorkPacer và sao chép Báo cáo cuối ngày (日報) của bạn.',
+        endOfShiftBody: 'Nhấn để mở WorkPacer và sao chép Báo cáo cuối ngày của bạn.',
         returnWorkTitle: 'Nhắc nhẹ từ WorkPacer',
-        returnWorkBody: 'Bạn đã rời máy {{min}} phút trong khung giờ làm việc. Sẵn sàng quay lại tập trung chưa?',
+        returnWorkBody:
+          'Bạn đã rời máy {{min}} phút trong khung giờ làm việc. Sẵn sàng quay lại tập trung chưa?',
         sittingTitle: 'Cảnh báo ngồi lâu ({{min}} phút)',
         sittingBody: 'Hãy đứng dậy vươn vai, đi lại 2 phút để bảo vệ cột sống và tuần hoàn máu nhé!',
         dailySummaryTitle: 'Tóm tắt ngày hôm nay — WorkPacer',
-        dailySummaryBody: 'Active: {{active}} | Idle: {{idle}} ({{ratio}}% hiệu suất). Hãy kiểm tra báo cáo của bạn!',
+        dailySummaryBody:
+          'Active: {{active}} | Idle: {{idle}} ({{ratio}}% hiệu suất). Hãy kiểm tra báo cáo của bạn!',
         weeklySummaryTitle: 'Tổng kết tuần — WorkPacer',
-        weeklySummaryBody: 'Tuần này bạn đã tập trung {{active}} với tỷ lệ hiệu suất {{ratio}}%.'
+        weeklySummaryBody: 'Tuần này bạn đã tập trung {{active}} với tỷ lệ hiệu suất {{ratio}}%.',
+        updateAvailableTitle: 'WorkPacer {{version}} đã sẵn sàng!',
+        updateAvailableBody: 'Nhấn để mở trang tải phiên bản mới nhất trên trình duyệt.'
       },
       daysShort: ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
     }
@@ -238,7 +272,8 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         report: 'Daily Report',
         health: 'Wellness',
         settings: 'Settings',
-        stickyWidget: 'Sticky Widget'
+        stickyWidget: 'Pin to Screen',
+        pomodoroWidget: 'Pin Pomodoro'
       },
       status: {
         active: 'Working (Active)',
@@ -282,7 +317,8 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         editBtn: 'Edit',
         deleteBtn: 'Delete',
         namePlaceholder: 'Status name (e.g. Coffee Run, Standup)...',
-        limitReached: 'Maximum limit of {{max}} Quick Idle buttons reached. Edit or remove an existing button first.',
+        limitReached:
+          'Maximum limit of {{max}} Quick Idle buttons reached. Edit or remove an existing button first.',
         usageBadge: '{{count}} uses',
         iconLabel: 'Icon',
         categoryLabel: 'Report Category'
@@ -290,9 +326,9 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
       returnPopup: {
         title: 'Welcome back!',
         prompt: 'You were away for {{minutes}} min. What were you doing?',
-        notePlaceholder: 'Optional note...',
+        notePlaceholder: 'Enter reason or details...',
         skip: 'Skip',
-        save: 'Save Tag'
+        save: 'Save to Timeline'
       },
       dashboard: {
         title: 'Work Pace & Screen Time Analytics',
@@ -330,9 +366,15 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         currentTask: 'Current Active Task',
         noActiveTask: 'No specific task selected (logging general active time)',
         todayTasks: "Today's Logged Tasks",
-        emptyTasks: 'No tasks logged today yet. Start one above or from the Sticky Widget.',
+        emptyTasks: 'No tasks logged today yet. Start one above or from the pinned widget.',
         delete: 'Delete',
         pomodoroTitle: 'Integrated Pomodoro Timer',
+        pinPomodoroBtn: 'Pin Floating Pomodoro',
+        unpinPomodoroBtn: 'Close Floating Pomodoro',
+        clockStyleLabel: 'Pomodoro Clock Style',
+        styleAnalog: 'Analog Clock',
+        styleDigital: 'Digital Clock',
+        styleRing: 'Circular Countdown',
         preset25: '25 / 5 min',
         preset50: '50 / 10 min',
         presetCustom: 'Custom',
@@ -350,14 +392,15 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         unpinTooltip: 'Unpin Always-on-Top',
         collapseTooltip: 'Collapse / Expand Widget',
         openMainTooltip: 'Open WorkPacer Main Window',
-        closeTooltip: 'Hide Sticky Widget',
+        closeTooltip: 'Hide Floating Widget',
         quickTaskPlaceholder: 'Quick task + press Enter...',
-        opacity: 'Glass Tint',
-        managePresetsTooltip: 'Customize Quick Idle Buttons'
+        opacity: 'Opacity',
+        managePresetsTooltip: 'Customize Quick Idle Buttons',
+        switchClockStyleTooltip: 'Switch Clock Display Style'
       },
       report: {
-        title: 'End-of-Shift Daily Report (日報)',
-        subtitle: 'Auto-synthesize your daily work timeline, edit inline, and copy Tab-delimited output',
+        title: 'End-of-Shift Daily Report',
+        subtitle: 'Auto-synthesize your daily work timeline, drag to reorder, and copy clean output',
         reportDate: 'Report Date',
         shiftWindow: 'Shift Hours',
         hideLunch: 'Hide lunch break ({{start}}–{{end}})',
@@ -368,8 +411,11 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         colStart: 'Start',
         colEnd: 'End',
         colContent: 'Work Description',
-        previewTitle: 'Plain-Text Preview (Tab \\t Delimited)',
-        previewHint: 'Formatted with Tab (\\t) characters for clean pasting into Chatwork, Slack, Teams, or Email',
+        dragHint: 'Drag grip to reorder',
+        dragTimeViolation:
+          'Cannot place a later task before an earlier task. Please adjust the task time before reordering.',
+        previewTitle: 'Standard Plain-Text Preview',
+        previewHint: 'Cleanly aligned plain-text ready to paste into Chatwork, Slack, Teams, or Email',
         copyBtn: 'Copy Daily Report',
         copiedBtn: 'Copied to Clipboard!',
         defaultWork: 'Core project tasks & development',
@@ -386,27 +432,34 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         sittingDesc: 'Remind you to stand up and stretch after {{min}} minutes of continuous work.',
         continuousActive: 'Current continuous active streak',
         returnWorkTitle: 'Gentle Return-to-Work Nudge',
-        returnWorkDesc: 'Notify gently if idle exceeds {{min}} minutes during shift hours (excluding lunch & meetings).',
+        returnWorkDesc:
+          'Notify gently if idle exceeds {{min}} minutes during shift hours (excluding lunch & meetings).',
         dailyGoalTitle: 'Daily Active Time Goal',
         dailyGoalDesc: 'Set your daily target active hours with real-time visual progress tracking.',
         overlayEyeTitle: '20-20-20 Eye Rest!',
-        overlayEyeInstruction: 'Step your gaze back and look 20 feet (6 meters) away for 20 seconds to relax eye focus.',
+        overlayEyeInstruction:
+          'Step your gaze back and look 20 feet (6 meters) away for 20 seconds to relax eye focus.',
         overlaySittingTitle: 'Time to Stand & Stretch!',
-        overlaySittingInstruction: 'You have been working continuously for over {{min}} minutes. Stand up and hydrate!',
+        overlaySittingInstruction:
+          'You have been working continuously for over {{min}} minutes. Stand up and hydrate!',
         snooze5m: 'Snooze 5 min',
         skipBreak: 'Done / Dismiss'
       },
       settings: {
         title: 'System Preferences & Liquid Glass',
-        subtitle: 'Configure Liquid Glass appearance, Quick Idle buttons, shift hours, and live language',
-        profileShiftSection: 'Profile & Work Shift (日報)',
-        userName: 'User Name (shown in Daily Report header)',
+        subtitle: 'Configure Liquid Glass appearance, report header, floating Pomodoro, and updates',
+        profileShiftSection: 'Profile, Work Shift & Report Header',
+        userName: 'User Name (shown in report header)',
+        reportTitle: 'Daily Report Header Title',
+        reportTitlePlaceholder: 'e.g. Daily Report',
         shiftStart: 'Shift Start Time',
         shiftEnd: 'Shift End Time',
         lunchWindow: 'Lunch Break Window',
+        pomodoroSection: 'Floating Pomodoro Settings',
+        pomodoroStyleDesc: 'Synchronize clock display style across Pomodoro view and floating widget',
         trackingSection: 'Smart Idle Tracking Engine',
         idleThreshold: 'Idle Detection Threshold (1–15 min)',
-        returnPopupThreshold: 'Show Quick Tag Popup after idle (min)',
+        returnPopupThreshold: 'Show Return Idle Modal after idle (min)',
         smartExceptions: 'Smart Exceptions (Fullscreen Video / Active Mic Call)',
         smartIgnore: 'Ignore idle & keep Active state',
         smartFlag: 'Record idle with exception flag',
@@ -419,16 +472,27 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         themeDark: 'Dark',
         themeSystem: 'System',
         reduceTransparency: 'Reduce Transparency (GPU Performance Mode)',
-        reduceTransparencyHint: 'Replaces Gaussian glass blur with crisp semi-opaque surfaces to save battery and GPU resources.',
+        reduceTransparencyHint:
+          'Replaces Gaussian glass blur with crisp semi-opaque surfaces to save battery and GPU resources.',
         notificationsSection: 'Automated OS Notifications',
-        endOfShiftNotif: 'Remind to submit Daily Report (日報) at shift end',
+        endOfShiftNotif: 'Remind to submit Daily Report at shift end',
         dailySummaryNotif: 'Daily end-of-day summary notification',
-        weeklySummaryNotif: 'Weekly performance digest notification'
+        weeklySummaryNotif: 'Weekly performance digest notification',
+        updateSection: 'App Version & Software Updates',
+        currentVersion: 'Current version: v{{version}}',
+        autoCheckUpdates: 'Automatically check for updates on startup',
+        checkForUpdateBtn: 'Check for Update',
+        checkingUpdate: 'Checking...',
+        upToDate: 'You are running the latest version (v{{version}}).',
+        updateAvailable: 'New version {{latest}} is available (current: v{{current}})!',
+        downloadUpdateBtn: 'Open Download Page',
+        updateCheckError: 'Could not reach GitHub Releases API. Please try again later.'
       },
       tray: {
         openApp: 'Open WorkPacer',
-        toggleWidget: 'Toggle Floating Sticky Widget',
-        openReport: 'Open Daily Report (日報)',
+        toggleWidget: 'Pin / Hide Floating Widget',
+        togglePomodoroWidget: 'Pin / Hide Floating Pomodoro',
+        openReport: 'Open Daily Report',
         pauseTracking: 'Pause Tracking',
         resumeWork: 'Resume Working Now',
         languageMenu: 'Language',
@@ -436,15 +500,18 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
       },
       notifications: {
         endOfShiftTitle: 'Shift Ended ({{time}}) — Daily Report Ready!',
-        endOfShiftBody: 'Click to open WorkPacer and copy your Daily Report (日報).',
+        endOfShiftBody: 'Click to open WorkPacer and copy your Daily Report.',
         returnWorkTitle: 'Gentle Nudge — WorkPacer',
-        returnWorkBody: 'You have been away for {{min}} minutes during work hours. Ready to jump back in?',
+        returnWorkBody:
+          'You have been away for {{min}} minutes during work hours. Ready to jump back in?',
         sittingTitle: 'Long Sitting Alert ({{min}} min)',
         sittingBody: 'Take 2 minutes to stand up, stretch, and refresh your posture!',
         dailySummaryTitle: 'Daily Summary — WorkPacer',
         dailySummaryBody: 'Active: {{active}} | Idle: {{idle}} ({{ratio}}% focus ratio).',
         weeklySummaryTitle: 'Weekly Digest — WorkPacer',
-        weeklySummaryBody: 'This week you logged {{active}} active work ({{ratio}}% focus ratio).'
+        weeklySummaryBody: 'This week you logged {{active}} active work ({{ratio}}% focus ratio).',
+        updateAvailableTitle: 'WorkPacer {{version}} is available!',
+        updateAvailableBody: 'Click to open the download page in your browser.'
       },
       daysShort: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
     }
@@ -453,16 +520,17 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
     translation: {
       app: {
         name: 'WorkPacer',
-        tagline: 'スマート稼働ペース計測・健康ケア・日報自動作成アプリ',
+        tagline: 'スマート稼働ペース計測・健康ケア・業務レポート自動作成アプリ',
         localPrivacy: '100% ローカルSQLite保存（クラウド送信なし・完全プライバシー保護）'
       },
       nav: {
         dashboard: '概要・統計',
         tasks: 'タスク・ポモ',
-        report: '日報作成',
+        report: 'レポート',
         health: '健康ケア',
         settings: '設定',
-        stickyWidget: '付箋ウィジェット'
+        stickyWidget: '画面にピン留め',
+        pomodoroWidget: 'ポモドーロ固定'
       },
       status: {
         active: '作業中 (Active)',
@@ -506,17 +574,18 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         editBtn: '編集',
         deleteBtn: '削除',
         namePlaceholder: 'ボタン名を入力（例：コーヒー休憩、朝会）...',
-        limitReached: '手動離席ボタンは最大{{max}}個までです。既存のボタンを編集または削除してください。',
+        limitReached:
+          '手動離席ボタンは最大{{max}}個までです。既存のボタンを編集または削除してください。',
         usageBadge: '{{count}}回',
         iconLabel: 'アイコン',
-        categoryLabel: '日報カテゴリ'
+        categoryLabel: 'レポート分類'
       },
       returnPopup: {
         title: 'おかえりなさい！',
         prompt: '{{minutes}}分間席を外していました。何をしていましたか？',
-        notePlaceholder: 'メモを入力（任意）...',
+        notePlaceholder: '理由やメモを入力...',
         skip: 'スキップ',
-        save: '記録する'
+        save: 'タイムラインに保存'
       },
       dashboard: {
         title: 'ワークペース & スクリーンタイム分析',
@@ -547,7 +616,7 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
       },
       tasks: {
         title: 'タスク記録 & ポモドーロタイマー',
-        subtitle: '現在の作業内容を記録し、終業時の日報タイムラインへ自動反映します',
+        subtitle: '現在の作業内容を記録し、終業時のレポートタイムラインへ自動反映します',
         inputPlaceholder: '現在の作業内容を入力（例：PR #42レビュー、API設計）...',
         startBtn: '記録開始',
         stopBtn: '完了',
@@ -557,6 +626,12 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         emptyTasks: '本日のタスクはまだありません。上の入力欄またはウィジェットから追加できます。',
         delete: '削除',
         pomodoroTitle: '統合ポモドーロタイマー',
+        pinPomodoroBtn: 'ポモドーロを画面に固定',
+        unpinPomodoroBtn: 'ポモドーロ固定を閉じる',
+        clockStyleLabel: 'ポモドーロ時計スタイル',
+        styleAnalog: 'アナログ時計',
+        styleDigital: 'デジタル時計',
+        styleRing: '円形カウントダウン',
         preset25: '25分 / 5分',
         preset50: '50分 / 10分',
         presetCustom: 'カスタム',
@@ -576,12 +651,13 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         openMainTooltip: 'WorkPacer メイン画面を開く',
         closeTooltip: 'ウィジェットを隠す',
         quickTaskPlaceholder: '作業名を入力してEnter...',
-        opacity: 'ガラス透明度',
-        managePresetsTooltip: '手動離席ボタンをカスタマイズ'
+        opacity: '不透明度',
+        managePresetsTooltip: '手動離席ボタンをカスタマイズ',
+        switchClockStyleTooltip: '時計の表示スタイルを切替'
       },
       report: {
-        title: '業務日報作成 (Daily Report / 日報)',
-        subtitle: '1日の作業ログと稼働状況からタイムラインを自動生成し、Tab区切り形式で出力',
+        title: '終業レポート作成',
+        subtitle: '1日の作業ログと稼働状況からタイムラインを自動生成し、ドラッグで並び替え可能',
         reportDate: '対象日',
         shiftWindow: '勤務時間帯',
         hideLunch: '昼休憩を除外する ({{start}}–{{end}})',
@@ -592,9 +668,12 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         colStart: '開始',
         colEnd: '終了',
         colContent: '業務内容',
-        previewTitle: 'プレーンテキストプレビュー (Tab \\t 区切り)',
-        previewHint: 'Chatwork・Slack・Teams・メールにそのまま綺麗に貼り付けられるTab区切り形式です',
-        copyBtn: '日報をコピーする',
+        dragHint: 'ハンドルをドラッグして移動',
+        dragTimeViolation:
+          '遅い時刻のタスクを早い時刻のタスクより前に移動できません。先に時刻を変更してください。',
+        previewTitle: 'プレーンテキストプレビュー',
+        previewHint: 'Chatwork・Slack・Teams・メールにそのまま綺麗に貼り付けられる形式です',
+        copyBtn: 'レポートをコピーする',
         copiedBtn: 'コピーしました！',
         defaultWork: '通常業務・開発作業',
         savedBadge: '自動保存済み'
@@ -610,27 +689,34 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         sittingDesc: '連続作業が{{min}}分を超えたら立ち上がってストレッチを促します。',
         continuousActive: '現在の連続作業時間',
         returnWorkTitle: '勤務時間中の復帰リマインダー',
-        returnWorkDesc: '勤務時間中に{{min}}分以上離席が続いた場合（昼休憩・会議除く）に優しく通知します。',
+        returnWorkDesc:
+          '勤務時間中に{{min}}分以上離席が続いた場合（昼休憩・会議除く）に優しく通知します。',
         dailyGoalTitle: '1日の目標作業時間',
         dailyGoalDesc: '1日の目標アクティブ時間を設定し、達成率をプログレスバーで表示します。',
         overlayEyeTitle: '20-20-20 アイケア休憩！',
-        overlayEyeInstruction: '画面から目を離し、約6メートル（20フィート）先を20秒間見つめて目を休めましょう。',
+        overlayEyeInstruction:
+          '画面から目を離し、約6メートル（20フィート）先を20秒間見つめて目を休めましょう。',
         overlaySittingTitle: '立ち上がってリフレッシュしましょう！',
-        overlaySittingInstruction: '{{min}}分以上連続で作業しています。背伸びや水分補給をしましょう。',
+        overlaySittingInstruction:
+          '{{min}}分以上連続で作業しています。背伸びや水分補給をしましょう。',
         snooze5m: '5分後に再通知',
         skipBreak: '完了 / 閉じる'
       },
       settings: {
         title: 'システム設定 & Liquid Glass 外観',
-        subtitle: 'Liquid Glass デザイン、手動離席ボタン、勤務シフト、表示言語をリアルタイム設定',
-        profileShiftSection: 'プロフィール & 勤務シフト (日報)',
-        userName: 'ユーザー名（日報ヘッダーに表示）',
+        subtitle: 'Liquid Glass デザイン、レポート件名、ポモドーロ固定、アップデート確認',
+        profileShiftSection: 'プロフィール・勤務シフト・レポート件名',
+        userName: 'ユーザー名（レポートヘッダーに表示）',
+        reportTitle: 'レポート件名タイトル',
+        reportTitlePlaceholder: '例: Daily Report',
         shiftStart: '始業時刻',
         shiftEnd: '終業時刻',
         lunchWindow: '昼休憩時間',
+        pomodoroSection: 'フローティング・ポモドーロ設定',
+        pomodoroStyleDesc: 'ポモドーロ画面と固定ウィジェットの時計スタイルを同期します',
         trackingSection: 'スマート離席トラッキング設定',
         idleThreshold: 'アイドル判定しきい値 (1〜15分)',
-        returnPopupThreshold: '復帰時タグポップアップ表示しきい値 (分)',
+        returnPopupThreshold: '復帰時モーダル表示しきい値 (分)',
         smartExceptions: 'スマート例外（全画面動画・マイク通話中）',
         smartIgnore: '離席とみなさず作業中を維持',
         smartFlag: '例外フラグ付きで記録する',
@@ -643,24 +729,35 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         themeDark: 'ダーク',
         themeSystem: 'システム連動',
         reduceTransparency: '透明度を下げる（GPUパフォーマンス優先）',
-        reduceTransparencyHint: 'ガラスのぼかし効果を抑え、省電力で軽快な半不透明サーフェスに切り替えます。',
+        reduceTransparencyHint:
+          'ガラスのぼかし効果を抑え、省電力で軽快な半不透明サーフェスに切り替えます。',
         notificationsSection: '自動OS通知',
-        endOfShiftNotif: '終業時刻に日報作成リマインダーを通知',
+        endOfShiftNotif: '終業時刻にレポート作成リマインダーを通知',
         dailySummaryNotif: '1日の終わりに稼働サマリーを通知',
-        weeklySummaryNotif: '週末に週間レポートを通知'
+        weeklySummaryNotif: '週末に週間レポートを通知',
+        updateSection: 'バージョン情報 & アップデート確認',
+        currentVersion: '現在のバージョン: v{{version}}',
+        autoCheckUpdates: '起動時に新しいアップデートを自動確認する',
+        checkForUpdateBtn: 'アップデートを確認 (Check for Update)',
+        checkingUpdate: '確認中...',
+        upToDate: '最新バージョン (v{{version}}) を使用しています。',
+        updateAvailable: '新しいバージョン {{latest}} が利用可能です（現在: v{{current}}）！',
+        downloadUpdateBtn: 'ダウンロードページを開く',
+        updateCheckError: 'GitHub Releases API に接続できませんでした。後でもう一度お試しください。'
       },
       tray: {
         openApp: 'WorkPacer を開く',
-        toggleWidget: '付箋ウィジェットの表示切替',
-        openReport: '日報作成画面を開く (日報)',
+        toggleWidget: '付箋ウィジェットを画面にピン留め / 隠す',
+        togglePomodoroWidget: 'ポモドーロを画面に固定 / 隠す',
+        openReport: 'レポート作成画面を開く',
         pauseTracking: '計測を一時停止',
         resumeWork: '作業を再開する',
         languageMenu: '言語切替 (Language)',
         quit: 'WorkPacer を終了'
       },
       notifications: {
-        endOfShiftTitle: '終業時刻 ({{time}}) です — 日報を作成しましょう',
-        endOfShiftBody: 'クリックして WorkPacer を開き、本日の日報をコピーできます。',
+        endOfShiftTitle: '終業時刻 ({{time}}) です — レポートを作成しましょう',
+        endOfShiftBody: 'クリックして WorkPacer を開き、本日のレポートをコピーできます。',
         returnWorkTitle: 'WorkPacer リマインダー',
         returnWorkBody: '勤務時間中に{{min}}分間離席しています。作業を再開しますか？',
         sittingTitle: '座りすぎアラート ({{min}}分経過)',
@@ -668,7 +765,9 @@ export const i18nResources: Record<LanguageCode, { translation: Record<string, a
         dailySummaryTitle: '本日の稼働サマリー — WorkPacer',
         dailySummaryBody: '作業: {{active}} | 離席: {{idle}} (稼働率 {{ratio}}%)。',
         weeklySummaryTitle: '週間サマリー — WorkPacer',
-        weeklySummaryBody: '今週の合計作業時間は {{active}}（稼働率 {{ratio}}%）でした。'
+        weeklySummaryBody: '今週の合計作業時間は {{active}}（稼働率 {{ratio}}%）でした。',
+        updateAvailableTitle: 'WorkPacer {{version}} が公開されました！',
+        updateAvailableBody: 'クリックしてブラウザでダウンロードページを開きます。'
       },
       daysShort: ['日', '月', '火', '水', '木', '金', '土']
     }

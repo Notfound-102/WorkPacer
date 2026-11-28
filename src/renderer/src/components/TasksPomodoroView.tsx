@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import {
   CheckCircle2,
   Pause,
+  Pin,
   Play,
   RotateCcw,
   Settings2,
@@ -10,7 +11,14 @@ import {
   Timer,
   Trash2
 } from 'lucide-react'
-import { LiveTrackingState, PomodoroPreset, QuickIdlePreset, TaskRecord } from '@shared/types'
+import {
+  AppSettings,
+  LiveTrackingState,
+  PomodoroClockStyle,
+  PomodoroPreset,
+  QuickIdlePreset,
+  TaskRecord
+} from '@shared/types'
 import { bridge } from '../lib/bridge'
 import {
   formatClockTimer,
@@ -20,13 +28,21 @@ import {
 } from '../lib/formatters'
 import { PresetIconView } from './WorkPacerLogo'
 import { QuickPresetsManager } from './QuickPresetsManager'
+import { PomodoroClockFace } from './PomodoroClockFace'
 
 interface TasksPomodoroViewProps {
   state: LiveTrackingState
+  settings: AppSettings
   presets: QuickIdlePreset[]
+  timelineVersion: number
 }
 
-export const TasksPomodoroView: React.FC<TasksPomodoroViewProps> = ({ state, presets }) => {
+export const TasksPomodoroView: React.FC<TasksPomodoroViewProps> = ({
+  state,
+  settings,
+  presets,
+  timelineVersion
+}) => {
   const { t } = useTranslation()
   const [taskInput, setTaskInput] = useState('')
   const [tasks, setTasks] = useState<TaskRecord[]>([])
@@ -41,7 +57,7 @@ export const TasksPomodoroView: React.FC<TasksPomodoroViewProps> = ({ state, pre
 
   useEffect(() => {
     void loadTasks()
-  }, [state.activeTask?.id, state.status])
+  }, [state.activeTask?.id, state.status, timelineVersion])
 
   const handleStartTask = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
@@ -62,12 +78,7 @@ export const TasksPomodoroView: React.FC<TasksPomodoroViewProps> = ({ state, pre
   }
 
   const pomo = state.pomodoro
-  const totalPomoSec =
-    (pomo.phase === 'break' ? pomo.breakMinutes : pomo.focusMinutes) * 60 || 1500
-  const pomoProgressPct = Math.max(
-    0,
-    Math.min(100, ((totalPomoSec - pomo.remainingSec) / totalPomoSec) * 100)
-  )
+  const pomoPrefs = settings.pomodoroWidget
 
   return (
     <div className="space-y-5">
@@ -197,19 +208,33 @@ export const TasksPomodoroView: React.FC<TasksPomodoroViewProps> = ({ state, pre
           </div>
         </div>
 
-        {/* Right: Integrated Pomodoro & Frequency-Sorted Quick Idle Presets (2 cols) */}
+        {/* Right: Pomodoro Studio (with Floating Pin & 3 Clock Styles) + Quick Idle Presets */}
         <div className="lg:col-span-2 space-y-4">
           <div className="card-surface p-4 space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-sm font-bold flex items-center gap-1.5">
                 <Timer className="w-4 h-4 text-[var(--coral)]" />
                 {t('tasks.pomodoroTitle')}
               </h2>
-              <span className="text-xs text-[var(--text-muted)] tabular-nums">
-                {t('tasks.completedCycles', { count: pomo.completedFocusCount })}
-              </span>
+
+              <button
+                id="pin-pomodoro-widget-btn"
+                type="button"
+                onClick={() => void bridge.togglePomodoroWidget()}
+                className={`px-3 py-1 rounded-full text-xs font-semibold border flex items-center gap-1.5 transition-colors ${
+                  pomoPrefs.visible
+                    ? 'bg-[var(--accent-soft)] border-[var(--accent)] text-[var(--accent)]'
+                    : 'btn-subtle'
+                }`}
+              >
+                <Pin className="w-3 h-3" />
+                <span>
+                  {pomoPrefs.visible ? t('tasks.unpinPomodoroBtn') : t('tasks.pinPomodoroBtn')}
+                </span>
+              </button>
             </div>
 
+            {/* Duration Presets */}
             <div className="grid grid-cols-3 gap-1.5">
               {(
                 [
@@ -260,86 +285,81 @@ export const TasksPomodoroView: React.FC<TasksPomodoroViewProps> = ({ state, pre
               </div>
             )}
 
-            <div className="flex flex-col items-center py-2">
-              <div className="relative w-36 h-36 flex items-center justify-center">
-                <svg className="w-36 h-36 -rotate-90" viewBox="0 0 120 120">
-                  <circle
-                    cx="60"
-                    cy="60"
-                    r="52"
-                    fill="none"
-                    stroke="var(--bg-subtle)"
-                    strokeWidth="7"
-                  />
-                  <circle
-                    cx="60"
-                    cy="60"
-                    r="52"
-                    fill="none"
-                    stroke={pomo.phase === 'break' ? 'var(--accent)' : 'var(--coral)'}
-                    strokeWidth="7"
-                    strokeDasharray={326.7}
-                    strokeDashoffset={326.7 - (326.7 * pomoProgressPct) / 100}
-                    strokeLinecap="round"
-                  />
-                </svg>
-                <div className="absolute text-center">
-                  <div className="font-mono text-2xl font-bold tabular-nums">
-                    {formatClockTimer(pomo.remainingSec)}
-                  </div>
-                  <div className="text-[11px] font-medium text-[var(--text-secondary)] mt-0.5">
-                    {pomo.phase === 'break'
-                      ? t('status.pomodoro_break')
-                      : t('status.pomodoro_focus')}
-                  </div>
-                </div>
-              </div>
+            {/* Synchronized 3-Style Clock Face (Analog / Digital / Ring) */}
+            <PomodoroClockFace pomodoro={pomo} clockStyle={pomoPrefs.clockStyle} />
+
+            {/* 3-Style Switcher */}
+            <div className="grid grid-cols-3 gap-1 p-0.5 rounded-full bg-[var(--bg-subtle)] border border-[var(--border-subtle)] text-[11px] font-semibold">
+              {(['analog', 'digital', 'ring'] as PomodoroClockStyle[]).map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => void bridge.updatePomodoroWidgetPrefs({ clockStyle: st })}
+                  className={`py-1 rounded-full truncate px-2 transition-colors ${
+                    pomoPrefs.clockStyle === st
+                      ? 'bg-[var(--bg-glass-pill)] text-[var(--accent)] shadow-xs'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  {st === 'analog'
+                    ? t('tasks.styleAnalog')
+                    : st === 'digital'
+                      ? t('tasks.styleDigital')
+                      : t('tasks.styleRing')}
+                </button>
+              ))}
             </div>
 
-            <div className="flex items-center justify-center gap-2">
-              {pomo.running ? (
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <span className="text-xs text-[var(--text-muted)] tabular-nums">
+                {t('tasks.completedCycles', { count: pomo.completedFocusCount })}
+              </span>
+
+              <div className="flex items-center gap-1.5">
+                {pomo.running ? (
+                  <button
+                    type="button"
+                    onClick={() => void bridge.pausePomodoro()}
+                    className="btn-primary px-4 py-1.5 text-xs flex items-center gap-1.5"
+                  >
+                    <Pause className="w-3.5 h-3.5" />
+                    {t('tasks.pausePomo')}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void bridge.startPomodoro(
+                        pomo.phase === 'idle' ? pomo.preset : undefined,
+                        customFocus,
+                        customBreak
+                      )
+                    }
+                    className="btn-primary px-4 py-1.5 text-xs flex items-center gap-1.5"
+                  >
+                    <Play className="w-3.5 h-3.5" />
+                    {t('tasks.startPomo')}
+                  </button>
+                )}
+
                 <button
                   type="button"
-                  onClick={() => void bridge.pausePomodoro()}
-                  className="btn-primary px-5 py-1.5 text-xs flex items-center gap-1.5"
+                  onClick={() => void bridge.skipPomodoroPhase()}
+                  title={t('tasks.skipPhase')}
+                  className="btn-subtle p-2 text-xs"
                 >
-                  <Pause className="w-3.5 h-3.5" />
-                  {t('tasks.pausePomo')}
+                  <SkipForward className="w-3.5 h-3.5" />
                 </button>
-              ) : (
+
                 <button
                   type="button"
-                  onClick={() =>
-                    void bridge.startPomodoro(
-                      pomo.phase === 'idle' ? pomo.preset : undefined,
-                      customFocus,
-                      customBreak
-                    )
-                  }
-                  className="btn-primary px-5 py-1.5 text-xs flex items-center gap-1.5"
+                  onClick={() => void bridge.resetPomodoro()}
+                  title={t('tasks.resetPomo')}
+                  className="btn-subtle p-2 text-xs"
                 >
-                  <Play className="w-3.5 h-3.5" />
-                  {t('tasks.startPomo')}
+                  <RotateCcw className="w-3.5 h-3.5" />
                 </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => void bridge.skipPomodoroPhase()}
-                title={t('tasks.skipPhase')}
-                className="btn-subtle p-2 text-xs"
-              >
-                <SkipForward className="w-3.5 h-3.5" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => void bridge.resetPomodoro()}
-                title={t('tasks.resetPomo')}
-                className="btn-subtle p-2 text-xs"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-              </button>
+              </div>
             </div>
           </div>
 

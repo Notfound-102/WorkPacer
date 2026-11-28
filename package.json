@@ -1,8 +1,8 @@
 {
   "name": "workpacer",
   "productName": "WorkPacer",
-  "version": "1.1.0",
-  "description": "WorkPacer — Liquid Glass Cross-Platform Desktop Pace & Idle Tracker, Wellness Guardian, Sticky Widget & Daily Report (日報) Studio",
+  "version": "1.2.0",
+  "description": "WorkPacer — Liquid Glass Cross-Platform Desktop Pace & Idle Tracker, Wellness Guardian, Floating Widgets & Daily Report Studio",
   "main": "./out/main/index.js",
   "author": "WorkPacer Engineering",
   "license": "MIT",

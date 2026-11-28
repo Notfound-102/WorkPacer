@@ -7,7 +7,8 @@ import {
   QuickIdlePreset,
   ResolvedTheme,
   TaskRecord,
-  ThemeMode
+  ThemeMode,
+  UpdateCheckResult
 } from '@shared/types'
 import { bridge } from '../lib/bridge'
 import i18n from '../i18n'
@@ -17,6 +18,8 @@ export function useIdlePulse() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
   const [tasksToday, setTasksToday] = useState<TaskRecord[]>([])
   const [quickIdlePresets, setQuickIdlePresets] = useState<QuickIdlePreset[]>([])
+  const [timelineVersion, setTimelineVersion] = useState(0)
+  const [updateStatus, setUpdateStatus] = useState<UpdateCheckResult | null>(null)
   const [activeTab, setActiveTab] = useState<MainTabId>('dashboard')
 
   useEffect(() => {
@@ -56,6 +59,16 @@ export function useIdlePulse() {
       setQuickIdlePresets(nextPresets)
     })
 
+    const unsubTimeline = bridge.onTimelineChanged(() => {
+      if (!mounted) return
+      setTimelineVersion((v) => v + 1)
+    })
+
+    const unsubUpdate = bridge.onUpdateStatus((res) => {
+      if (!mounted) return
+      setUpdateStatus(res)
+    })
+
     const unsubNav = bridge.onNavigateTab((tab) => {
       if (!mounted) return
       setActiveTab(tab)
@@ -66,6 +79,8 @@ export function useIdlePulse() {
       unsubState()
       unsubSettings()
       unsubPresets()
+      unsubTimeline()
+      unsubUpdate()
       unsubNav()
     }
   }, [])
@@ -88,6 +103,9 @@ export function useIdlePulse() {
     settings,
     tasksToday,
     quickIdlePresets,
+    timelineVersion,
+    updateStatus,
+    setUpdateStatus,
     activeTab,
     setActiveTab,
     refreshTasks

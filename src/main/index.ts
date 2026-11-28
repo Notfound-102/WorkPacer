@@ -1,22 +1,33 @@
 import { writeFile } from 'fs/promises'
-import { app, dialog, ipcMain, nativeTheme, Notification, powerMonitor } from 'electron'
+import { app, dialog, ipcMain, nativeTheme, Notification, powerMonitor, shell } from 'electron'
 import { formatLocalDate, IdlePulseDatabase } from './database'
 import { migrateLegacyDatabaseIfNeeded } from './dataMigration'
 import { detectSmartException } from './smartExceptions'
 import { IdleTrackingEngine } from './idleTracker'
 import { WindowManager } from './windowManager'
 import { TrayManager } from './trayManager'
+import { checkForGitHubUpdates } from './updateChecker'
 import { translateMain } from '../shared/i18nResources'
-import { synthesizeDailyReportRows } from '../shared/reportFormatter'
+import {
+  epochToDayMinutes,
+  getDayStartMs,
+  minutesToReportTime,
+  parseTimeToMinutes,
+  sortReportRowsChronologically,
+  synthesizeDailyReportRows
+} from '../shared/reportFormatter'
 import {
   AnalyticsRange,
   AppSettings,
   DailyReportDocument,
+  DailyReportRow,
   IdleTag,
   LanguageCode,
   MainTabId,
   PomodoroPreset,
+  PomodoroWidgetPrefs,
   QuickPresetIcon,
+  SessionRecord,
   StickyWidgetPrefs
 } from '../shared/types'
 
@@ -38,6 +49,28 @@ function showLocalizedNotification(title: string, body: string, onClick?: () => 
     notif.on('click', onClick)
   }
   notif.show()
+}
+
+function openSafeExternalUrl(url: string): void {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+      void shell.openExternal(parsed.toString())
+    }
+  } catch {
+    // Ignore malformed URL
+  }
+}
+
+function buildTagLabelsMap(lang: LanguageCode): Record<IdleTag, string> {
+  return {
+    eating: translateMain(lang, 'tags.eating'),
+    rest: translateMain(lang, 'tags.rest'),
+    meeting: translateMain(lang, 'tags.meeting'),
+    out: translateMain(lang, 'tags.out'),
+    sleep: translateMain(lang, 'tags.sleep'),
+    other: translateMain(lang, 'tags.other')
+  }
 }
 
 function dispatchTrackerNotification(event: any): void {
@@ -139,7 +172,8 @@ function buildDailyReport(dateStr: string, forceRegenerate = false): DailyReport
     sessions: dayTotals.sessions,
     tasks,
     defaultWorkLabel: translateMain(settings.language, 'report.defaultWork'),
-    meetingLabel: translateMain(settings.language, 'tags.meeting')
+    meetingLabel: translateMain(settings.language, 'tags.meeting'),
+    tagLabels: buildTagLabelsMap(settings.language)
   })
 
   return db.saveDailyReport({
@@ -151,11 +185,108 @@ function buildDailyReport(dateStr: string, forceRegenerate = false): DailyReport
   })
 }
 
+/**
+ * Ensures that submitting a reason in the Return Idle Modal writes directly into
+ * the `daily_reports` Timeline table in SQLite (merging/splitting cleanly if a
+ * report document already exists for that day) and sorts chronologically.
+ */
+function syncSubmittedIdleSessionToTimeline(session: SessionRecord): string {
+  if (!db) return formatLocalDate(session.startTime)
+  const settings = db.getSettings()
+  const lang = settings.language
+  const tagLabels = buildTagLabelsMap(lang)
+  const dateStr = formatLocalDate(session.startTime)
+
+  const note = session.note?.trim() || ''
+  const tagName = session.tag ? tagLabels[session.tag] : ''
+  const content =
+    note && tagName && session.tag !== 'other' && note !== tagName
+      ? `${tagName}: ${note}`
+      : note || tagName || translateMain(lang, 'tags.other')
+
+  const existingDoc = db.getSavedDailyReport(dateStr)
+  if (!existingDoc) {
+    // Synthesizes & persists full timeline including the newly tagged session
+    buildDailyReport(dateStr, true)
+    return dateStr
+  }
+
+  const dayStartMs = getDayStartMs(dateStr)
+  const sMin = Math.max(0, epochToDayMinutes(session.startTime, dayStartMs))
+  const eMin = Math.max(
+    sMin + 1,
+    epochToDayMinutes(session.endTime ?? Date.now(), dayStartMs)
+  )
+
+  const rowId = `idle-session-${session.id}`
+  const adjustedRows: DailyReportRow[] = []
+
+  for (const r of existingDoc.rows) {
+    if (r.id === rowId) continue
+    const rStart = parseTimeToMinutes(r.startTime)
+    const rEnd = parseTimeToMinutes(r.endTime)
+    if (rEnd <= sMin || rStart >= eMin) {
+      adjustedRows.push(r)
+    } else {
+      if (rStart < sMin) {
+        adjustedRows.push({
+          ...r,
+          id: `${r.id}-pre`,
+          endTime: minutesToReportTime(sMin)
+        })
+      }
+      if (rEnd > eMin) {
+        adjustedRows.push({
+          ...r,
+          id: `${r.id}-post`,
+          startTime: minutesToReportTime(eMin)
+        })
+      }
+    }
+  }
+
+  adjustedRows.push({
+    id: rowId,
+    startTime: minutesToReportTime(sMin),
+    endTime: minutesToReportTime(eMin),
+    content
+  })
+
+  db.saveDailyReport({
+    ...existingDoc,
+    rows: sortReportRowsChronologically(adjustedRows),
+    updatedAt: Date.now()
+  })
+
+  return dateStr
+}
+
+function broadcastTimelineChanged(dateStr?: string): void {
+  windows?.broadcast('timeline:changed', { date: dateStr ?? formatLocalDate(Date.now()) })
+}
+
 function syncPresetsEverywhere(): void {
   if (!db || !windows || !tracker) return
   const presets = db.getQuickIdlePresets()
   windows.broadcast('presets:updated', presets)
   tray?.refresh(db.getSettings(), tracker.getLiveState(), presets, true)
+}
+
+async function performUpdateCheck(notifyIfAvailable: boolean) {
+  const result = await checkForGitHubUpdates(app.getVersion())
+  windows?.broadcast('update:status', result)
+
+  if (notifyIfAvailable && result.hasUpdate && result.latestVersion && db) {
+    const lang = db.getSettings().language
+    showLocalizedNotification(
+      translateMain(lang, 'notifications.updateAvailableTitle', {
+        version: result.latestVersion
+      }),
+      translateMain(lang, 'notifications.updateAvailableBody'),
+      () => openSafeExternalUrl(result.releaseUrl)
+    )
+  }
+  return result
 }
 
 function registerIpcHandlers(): void {
@@ -170,11 +301,20 @@ function registerIpcHandlers(): void {
     }
   })
 
+  ipcMain.handle('app:getVersion', () => app.getVersion())
+
+  ipcMain.handle('app:checkForUpdates', () => performUpdateCheck(false))
+
+  ipcMain.handle('app:openExternalUrl', (_e, url: string) => {
+    openSafeExternalUrl(url)
+  })
+
   ipcMain.handle('settings:update', (_e, partial: Partial<AppSettings>) => {
     if (!db || !windows || !tracker) throw new Error('Engine not initialized')
     const updated = db.updateSettings(partial)
     windows.syncNativeTheme(updated.theme)
     windows.syncStickyWidgetWindow(updated.stickyWidget)
+    windows.syncPomodoroWidgetWindow(updated.pomodoroWidget)
     windows.broadcast('settings:updated', updated)
     tracker.emitState()
     tray?.refresh(updated, tracker.getLiveState(), db.getQuickIdlePresets(), true)
@@ -192,10 +332,12 @@ function registerIpcHandlers(): void {
   // Manual Idle, Pause & Quick Idle Presets
   ipcMain.handle('tracking:startManualIdle', (_e, tag: IdleTag, note?: string) => {
     tracker?.startManualIdle(tag, note)
+    broadcastTimelineChanged()
   })
 
   ipcMain.handle('tracking:resumeFromIdle', () => {
     tracker?.resumeFromIdle()
+    broadcastTimelineChanged()
   })
 
   ipcMain.handle('tracking:togglePause', () => {
@@ -237,14 +379,21 @@ function registerIpcHandlers(): void {
     if (!tracker) throw new Error('Tracker not initialized')
     const presets = tracker.triggerQuickIdlePreset(id)
     syncPresetsEverywhere()
+    broadcastTimelineChanged()
     return presets
   })
 
-  // Return Popup
+  // Return Idle Modal Submit -> Persist into SQLite Timeline + Broadcast timeline:changed
   ipcMain.handle(
     'tracking:submitReturnTag',
     (_e, sessionId: number, tag: IdleTag | null, note?: string) => {
-      tracker?.submitReturnTag(sessionId, tag, note)
+      const updatedSession = tracker?.submitReturnTag(sessionId, tag, note) ?? null
+      if (updatedSession) {
+        const dateStr = syncSubmittedIdleSessionToTimeline(updatedSession)
+        broadcastTimelineChanged(dateStr)
+      } else {
+        broadcastTimelineChanged()
+      }
       windows?.closeReturnPopup()
     }
   )
@@ -254,14 +403,17 @@ function registerIpcHandlers(): void {
     windows?.closeReturnPopup()
   })
 
-  // Tasks
+  // Tasks -> Also broadcast timeline:changed so Report & Dashboard timelines stay fresh
   ipcMain.handle('tasks:start', (_e, title: string, category?: string) => {
     if (!tracker) throw new Error('Tracker not initialized')
-    return tracker.startTask(title, category)
+    const task = tracker.startTask(title, category)
+    broadcastTimelineChanged()
+    return task
   })
 
   ipcMain.handle('tasks:stopActive', () => {
     tracker?.stopActiveTask()
+    broadcastTimelineChanged()
   })
 
   ipcMain.handle('tasks:getByDate', (_e, dateStr: string) => {
@@ -271,14 +423,16 @@ function registerIpcHandlers(): void {
   ipcMain.handle('tasks:update', (_e, id: number, updates: any) => {
     db?.updateTask(id, updates)
     tracker?.emitState()
+    broadcastTimelineChanged()
   })
 
   ipcMain.handle('tasks:delete', (_e, id: number) => {
     db?.deleteTask(id)
     tracker?.emitState()
+    broadcastTimelineChanged()
   })
 
-  // Pomodoro
+  // Pomodoro & Floating Pomodoro Widget
   ipcMain.handle(
     'pomodoro:start',
     (_e, preset?: PomodoroPreset, customFocus?: number, customBreak?: number) => {
@@ -289,6 +443,31 @@ function registerIpcHandlers(): void {
   ipcMain.handle('pomodoro:pause', () => tracker?.pausePomodoro())
   ipcMain.handle('pomodoro:reset', () => tracker?.resetPomodoro())
   ipcMain.handle('pomodoro:skip', () => tracker?.skipPomodoroPhase())
+
+  ipcMain.handle('pomodoro:toggleWidget', (_e, visible?: boolean) => {
+    if (!db || !windows || !tracker) throw new Error('Engine not initialized')
+    const cur = db.getSettings()
+    const nextVisible = visible !== undefined ? visible : !cur.pomodoroWidget.visible
+    const updated = db.updateSettings({
+      pomodoroWidget: { ...cur.pomodoroWidget, visible: nextVisible }
+    })
+    windows.syncPomodoroWidgetWindow(updated.pomodoroWidget)
+    windows.broadcast('settings:updated', updated)
+    tray?.refresh(updated, tracker.getLiveState(), db.getQuickIdlePresets(), true)
+    return updated
+  })
+
+  ipcMain.handle('pomodoro:updateWidgetPrefs', (_e, prefs: Partial<PomodoroWidgetPrefs>) => {
+    if (!db || !windows || !tracker) throw new Error('Engine not initialized')
+    const cur = db.getSettings()
+    const updated = db.updateSettings({
+      pomodoroWidget: { ...cur.pomodoroWidget, ...prefs }
+    })
+    windows.syncPomodoroWidgetWindow(updated.pomodoroWidget)
+    windows.broadcast('settings:updated', updated)
+    tray?.refresh(updated, tracker.getLiveState(), db.getQuickIdlePresets(), true)
+    return updated
+  })
 
   // Health & Break Overlay
   ipcMain.handle('health:triggerEyeBreakNow', () => {
@@ -363,14 +542,16 @@ function registerIpcHandlers(): void {
     sendSummaryNotification(period)
   })
 
-  // Daily Report (日報)
+  // Daily Report
   ipcMain.handle('report:get', (_e, dateStr: string, forceRegenerate?: boolean) => {
     return buildDailyReport(dateStr, Boolean(forceRegenerate))
   })
 
   ipcMain.handle('report:save', (_e, doc: DailyReportDocument) => {
     if (!db) throw new Error('Database not initialized')
-    return db.saveDailyReport(doc)
+    const saved = db.saveDailyReport(doc)
+    broadcastTimelineChanged(doc.date)
+    return saved
   })
 }
 
@@ -427,12 +608,26 @@ if (!gotSingleLock) {
         windows.broadcast('settings:updated', updated)
         tray?.refresh(updated, tracker.getLiveState(), db.getQuickIdlePresets(), true)
       },
+      onTogglePomodoroWidget: () => {
+        if (!db || !windows || !tracker) return
+        const cur = db.getSettings()
+        const updated = db.updateSettings({
+          pomodoroWidget: { ...cur.pomodoroWidget, visible: !cur.pomodoroWidget.visible }
+        })
+        windows.syncPomodoroWidgetWindow(updated.pomodoroWidget)
+        windows.broadcast('settings:updated', updated)
+        tray?.refresh(updated, tracker.getLiveState(), db.getQuickIdlePresets(), true)
+      },
       onTriggerPreset: (presetId) => {
         tracker?.triggerQuickIdlePreset(presetId)
         syncPresetsEverywhere()
+        broadcastTimelineChanged()
       },
       onTogglePause: () => tracker?.togglePauseTracking(),
-      onResumeWork: () => tracker?.resumeFromIdle(),
+      onResumeWork: () => {
+        tracker?.resumeFromIdle()
+        broadcastTimelineChanged()
+      },
       onChangeLanguage: (lang) => {
         if (!db || !windows || !tracker) return
         const updated = db.updateSettings({ language: lang })
@@ -487,15 +682,25 @@ if (!gotSingleLock) {
     if (initialSettings.stickyWidget.visible) {
       windows.syncStickyWidgetWindow(initialSettings.stickyWidget)
     }
+    if (initialSettings.pomodoroWidget.visible) {
+      windows.syncPomodoroWidgetWindow(initialSettings.pomodoroWidget)
+    }
 
     tracker.start()
 
-    if (process.env.WORKPACER_SMOKE_TEST === '1' || process.env.IDLEPULSE_SMOKE_TEST === '1') {
+    const isSmokeTest =
+      process.env.WORKPACER_SMOKE_TEST === '1' || process.env.IDLEPULSE_SMOKE_TEST === '1'
+
+    if (isSmokeTest) {
       setTimeout(() => {
         console.log('WORKPACER_SMOKE_READY')
         windows?.setQuitting(true)
         app.quit()
       }, 2200)
+    } else if (initialSettings.autoCheckUpdates) {
+      setTimeout(() => {
+        void performUpdateCheck(true)
+      }, 3500)
     }
 
     app.on('activate', () => {

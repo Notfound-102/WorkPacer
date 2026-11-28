@@ -1,22 +1,30 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Bell,
+  CheckCircle2,
   Cpu,
+  Download,
+  ExternalLink,
   Globe,
   Monitor,
   Moon,
+  Pin,
+  RefreshCw,
   ShieldCheck,
   Sparkles,
   Sun,
+  Timer,
   UserCheck
 } from 'lucide-react'
 import {
   AppSettings,
   LanguageCode,
+  PomodoroClockStyle,
   QuickIdlePreset,
   SmartExceptionMode,
-  ThemeMode
+  ThemeMode,
+  UpdateCheckResult
 } from '@shared/types'
 import { bridge } from '../lib/bridge'
 import { WorkPacerLogo } from './WorkPacerLogo'
@@ -25,10 +33,35 @@ import { QuickPresetsManager } from './QuickPresetsManager'
 interface SettingsViewProps {
   settings: AppSettings
   presets: QuickIdlePreset[]
+  updateStatus: UpdateCheckResult | null
+  onUpdateStatusChange: (res: UpdateCheckResult) => void
 }
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ settings, presets }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({
+  settings,
+  presets,
+  updateStatus,
+  onUpdateStatusChange
+}) => {
   const { t } = useTranslation()
+  const [appVersion, setAppVersion] = useState('1.2.0')
+  const [checkingUpdate, setCheckingUpdate] = useState(false)
+
+  useEffect(() => {
+    void bridge.getAppVersion().then((v) => {
+      if (v) setAppVersion(v)
+    })
+  }, [])
+
+  const handleCheckUpdate = async (): Promise<void> => {
+    setCheckingUpdate(true)
+    try {
+      const res = await bridge.checkForUpdates()
+      onUpdateStatusChange(res)
+    } finally {
+      setCheckingUpdate(false)
+    }
+  }
 
   return (
     <div className="space-y-5 max-w-4xl">
@@ -130,20 +163,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, presets })
         </div>
       </div>
 
-      {/* 2. Quick Manual Idle Presets Manager (Max 6, Auto-Sorted by Usage) */}
-      <div className="card-surface p-5">
-        <QuickPresetsManager presets={presets} />
-      </div>
-
-      {/* 3. Profile & Work Shift (日報) */}
+      {/* 2. Profile, Work Shift & Customizable Daily Report Title */}
       <div className="card-surface p-5 space-y-4">
         <div className="flex items-center gap-2">
           <UserCheck className="w-4 h-4 text-[var(--accent)]" />
           <h2 className="text-sm font-bold">{t('settings.profileShiftSection')}</h2>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <label className="space-y-1 sm:col-span-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <label className="space-y-1">
             <span className="text-xs font-semibold text-[var(--text-secondary)]">
               {t('settings.userName')}
             </span>
@@ -156,6 +184,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, presets })
             />
           </label>
 
+          <label className="space-y-1">
+            <span className="text-xs font-semibold text-[var(--text-secondary)]">
+              {t('settings.reportTitle')}
+            </span>
+            <input
+              id="settings-report-title-input"
+              type="text"
+              value={settings.reportTitle}
+              placeholder={t('settings.reportTitlePlaceholder')}
+              onChange={(e) => void bridge.updateSettings({ reportTitle: e.target.value })}
+              className="input-control w-full"
+            />
+          </label>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <label className="space-y-1">
             <span className="text-xs font-semibold text-[var(--text-secondary)]">
               {t('settings.shiftStart')}
@@ -199,7 +243,69 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, presets })
         </div>
       </div>
 
-      {/* 4. Core Idle Tracking & Smart Exceptions */}
+      {/* 3. Floating Pomodoro Clock Style (Synchronized with Floating Pomodoro Widget) */}
+      <div className="card-surface p-5 space-y-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="flex items-center gap-2">
+              <Timer className="w-4 h-4 text-[var(--coral)]" />
+              <h2 className="text-sm font-bold">{t('settings.pomodoroSection')}</h2>
+            </div>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">
+              {t('settings.pomodoroStyleDesc')}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void bridge.togglePomodoroWidget()}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold border flex items-center gap-1.5 transition-colors ${
+              settings.pomodoroWidget.visible
+                ? 'bg-[var(--accent-soft)] border-[var(--accent)] text-[var(--accent)]'
+                : 'btn-subtle'
+            }`}
+          >
+            <Pin className="w-3.5 h-3.5" />
+            <span>
+              {settings.pomodoroWidget.visible
+                ? t('tasks.unpinPomodoroBtn')
+                : t('tasks.pinPomodoroBtn')}
+            </span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {(
+            [
+              { id: 'analog', label: t('tasks.styleAnalog') },
+              { id: 'digital', label: t('tasks.styleDigital') },
+              { id: 'ring', label: t('tasks.styleRing') }
+            ] as { id: PomodoroClockStyle; label: string }[]
+          ).map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() =>
+                void bridge.updatePomodoroWidgetPrefs({ clockStyle: item.id })
+              }
+              className={`py-2 px-3 rounded-full text-xs font-semibold border transition-colors ${
+                settings.pomodoroWidget.clockStyle === item.id
+                  ? 'bg-[var(--accent-soft)] border-[var(--accent)] text-[var(--accent)]'
+                  : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)] text-[var(--text-secondary)]'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 4. Quick Manual Idle Presets Manager (Max 6, Auto-Sorted by Usage) */}
+      <div className="card-surface p-5">
+        <QuickPresetsManager presets={presets} />
+      </div>
+
+      {/* 5. Core Idle Tracking & Smart Exceptions */}
       <div className="card-surface p-5 space-y-4">
         <div className="flex items-center gap-2">
           <Cpu className="w-4 h-4 text-[var(--accent)]" />
@@ -284,7 +390,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, presets })
         </label>
       </div>
 
-      {/* 5. Automated Notifications & Local SQLite Privacy */}
+      {/* 6. Automated Notifications */}
       <div className="card-surface p-5 space-y-3">
         <div className="flex items-center gap-2">
           <Bell className="w-4 h-4 text-[var(--accent)]" />
@@ -328,8 +434,101 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, presets })
             <span>{t('settings.weeklySummaryNotif')}</span>
           </label>
         </div>
+      </div>
 
-        <div className="pt-3 mt-2 border-t border-[var(--border-subtle)] flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+      {/* 7. App Version & Check for Update (GitHub Releases API) */}
+      <div className="card-surface p-5 space-y-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Download className="w-4 h-4 text-[var(--accent)]" />
+              <h2 className="text-sm font-bold">{t('settings.updateSection')}</h2>
+            </div>
+            <p className="text-xs text-[var(--text-secondary)] font-mono mt-0.5">
+              {t('settings.currentVersion', { version: appVersion })}
+            </p>
+          </div>
+
+          <button
+            id="settings-check-update-btn"
+            type="button"
+            disabled={checkingUpdate}
+            onClick={() => void handleCheckUpdate()}
+            className="btn-primary px-4 py-2 text-xs flex items-center gap-1.5"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${checkingUpdate ? 'animate-spin' : ''}`} />
+            <span>
+              {checkingUpdate
+                ? t('settings.checkingUpdate')
+                : t('settings.checkForUpdateBtn')}
+            </span>
+          </button>
+        </div>
+
+        <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+          <input
+            type="checkbox"
+            checked={settings.autoCheckUpdates}
+            onChange={(e) =>
+              void bridge.updateSettings({ autoCheckUpdates: e.target.checked })
+            }
+            className="accent-[var(--accent)]"
+          />
+          <span>{t('settings.autoCheckUpdates')}</span>
+        </label>
+
+        {updateStatus && (
+          <div className="p-3.5 rounded-2xl bg-[var(--bg-subtle)] border border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-3 text-xs animate-fluid-in">
+            {updateStatus.hasUpdate && updateStatus.latestVersion ? (
+              <>
+                <div className="space-y-1">
+                  <div className="font-bold text-[var(--accent)]">
+                    {t('settings.updateAvailable', {
+                      latest: updateStatus.latestVersion,
+                      current: updateStatus.currentVersion
+                    })}
+                  </div>
+                  {updateStatus.releaseNotes && (
+                    <p className="text-[var(--text-secondary)] line-clamp-2 max-w-xl">
+                      {updateStatus.releaseNotes}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void bridge.openExternalUrl(updateStatus.releaseUrl)}
+                  className="btn-primary px-4 py-1.5 text-xs flex items-center gap-1.5 shrink-0"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>{t('settings.downloadUpdateBtn')}</span>
+                </button>
+              </>
+            ) : updateStatus.error ? (
+              <div className="flex flex-wrap items-center justify-between gap-2 w-full">
+                <span className="text-[var(--amber)] font-medium">
+                  {t('settings.updateCheckError')} ({updateStatus.error})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void bridge.openExternalUrl(updateStatus.releaseUrl)}
+                  className="btn-subtle px-3 py-1 text-xs font-semibold flex items-center gap-1"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  <span>GitHub Releases</span>
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-[var(--accent)] font-semibold">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>
+                  {t('settings.upToDate', { version: updateStatus.currentVersion })}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="pt-3 border-t border-[var(--border-subtle)] flex items-center gap-2 text-xs text-[var(--text-secondary)]">
           <ShieldCheck className="w-4 h-4 text-[var(--accent)] shrink-0" />
           <span>{t('app.localPrivacy')}</span>
         </div>

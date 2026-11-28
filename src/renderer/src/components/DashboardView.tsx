@@ -47,9 +47,15 @@ interface DashboardViewProps {
   state: LiveTrackingState
   settings: AppSettings
   presets: QuickIdlePreset[]
+  timelineVersion: number
 }
 
-export const DashboardView: React.FC<DashboardViewProps> = ({ state, settings, presets }) => {
+export const DashboardView: React.FC<DashboardViewProps> = ({
+  state,
+  settings,
+  presets,
+  timelineVersion
+}) => {
   const { t, i18n } = useTranslation()
   const [range, setRange] = useState<AnalyticsRange>('hour')
   const [analytics, setAnalytics] = useState<AnalyticsPayload | null>(null)
@@ -72,7 +78,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ state, settings, p
       active = false
       clearInterval(timer)
     }
-  }, [range, state.status, state.todayActiveSec])
+  }, [range, state.status, state.todayActiveSec, timelineVersion])
 
   const goalSec = Math.max(60, settings.dailyGoalMinutes * 60)
   const goalPct = Math.min(100, Math.round((state.todayActiveSec / goalSec) * 100))

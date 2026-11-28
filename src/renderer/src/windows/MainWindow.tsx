@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import {
   BarChart3,
   CheckSquare,
+  Download,
   FileText,
   HeartPulse,
   Layers,
@@ -19,7 +20,8 @@ import {
   LiveTrackingState,
   MainTabId,
   QuickIdlePreset,
-  ThemeMode
+  ThemeMode,
+  UpdateCheckResult
 } from '@shared/types'
 import { bridge, isElectronEnv } from '../lib/bridge'
 import { formatClockTimer } from '../lib/formatters'
@@ -30,6 +32,7 @@ import { DailyReportView } from '../components/DailyReportView'
 import { HealthView } from '../components/HealthView'
 import { SettingsView } from '../components/SettingsView'
 import { StickyWidget } from './StickyWidget'
+import { PomodoroWidget } from './PomodoroWidget'
 import { ReturnPopup } from './ReturnPopup'
 import { BreakOverlay } from './BreakOverlay'
 
@@ -37,6 +40,9 @@ interface MainWindowProps {
   state: LiveTrackingState
   settings: AppSettings
   presets: QuickIdlePreset[]
+  timelineVersion: number
+  updateStatus: UpdateCheckResult | null
+  onUpdateStatusChange: (res: UpdateCheckResult) => void
   activeTab: MainTabId
   onSelectTab: (tab: MainTabId) => void
 }
@@ -45,6 +51,9 @@ export const MainWindow: React.FC<MainWindowProps> = ({
   state,
   settings,
   presets,
+  timelineVersion,
+  updateStatus,
+  onUpdateStatusChange,
   activeTab,
   onSelectTab
 }) => {
@@ -90,14 +99,25 @@ export const MainWindow: React.FC<MainWindowProps> = ({
             {settings.shiftStart}–{settings.shiftEnd}
           </span>
         </div>
-        <div className="w-32" />
+
+        <div className="flex items-center gap-2 pr-36">
+          {updateStatus?.hasUpdate && updateStatus.latestVersion && (
+            <button
+              type="button"
+              onClick={() => void bridge.openExternalUrl(updateStatus.releaseUrl)}
+              className="no-drag px-2.5 py-0.5 rounded-full bg-[var(--accent-soft)] border border-[var(--accent)] text-[var(--accent)] text-[11px] font-semibold flex items-center gap-1 hover:opacity-90"
+            >
+              <Download className="w-3 h-3" />
+              <span>{updateStatus.latestVersion}</span>
+            </button>
+          )}
+        </div>
       </header>
 
       {/* Main Workspace Container */}
       <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-4 px-3.5 pb-3.5">
         {/* Floating Liquid Glass Sidebar — Zero Vertical Scrollbar Guaranteed */}
         <aside className="w-full md:w-60 shrink-0 glass-sidebar p-3.5 flex flex-col justify-between overflow-hidden">
-          {/* Top Section: Brand + Live Status Pill + Active Glass Pill Navigation */}
           <div className="space-y-3">
             {/* Brand Header */}
             <div className="flex items-center gap-2.5 px-1">
@@ -169,7 +189,7 @@ export const MainWindow: React.FC<MainWindowProps> = ({
             </nav>
           </div>
 
-          {/* Bottom Dock: Sticky Widget Toggle + Theme & Language Pills */}
+          {/* Bottom Dock: Ghim ra màn hình + Theme & Language Pills */}
           <div className="space-y-2 pt-2.5 border-t border-[var(--border-subtle)]">
             <button
               id="sidebar-toggle-sticky-widget"
@@ -191,7 +211,6 @@ export const MainWindow: React.FC<MainWindowProps> = ({
             </button>
 
             <div className="flex items-center justify-between gap-1.5">
-              {/* Theme Quick Switch (Light / Dark / System) */}
               <div className="flex items-center gap-0.5 p-0.5 rounded-full bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
                 {themeOptions.map(({ mode, icon: Icon, title }) => (
                   <button
@@ -210,7 +229,6 @@ export const MainWindow: React.FC<MainWindowProps> = ({
                 ))}
               </div>
 
-              {/* Realtime Language Switcher (VI / EN / JA) */}
               <div className="flex-1 grid grid-cols-3 gap-0.5 p-0.5 rounded-full bg-[var(--bg-subtle)] border border-[var(--border-subtle)]">
                 {(['vi', 'en', 'ja'] as LanguageCode[]).map((code) => (
                   <button
@@ -232,19 +250,36 @@ export const MainWindow: React.FC<MainWindowProps> = ({
           </div>
         </aside>
 
-        {/* Main Scrollable Content Pane with Fluid Tab Transition */}
+        {/* Main Scrollable Content Pane */}
         <main className="flex-1 min-w-0 min-h-0 overflow-y-auto pr-1">
           <div key={activeTab} className="animate-fluid-in pb-4">
             {activeTab === 'dashboard' && (
-              <DashboardView state={state} settings={settings} presets={presets} />
+              <DashboardView
+                state={state}
+                settings={settings}
+                presets={presets}
+                timelineVersion={timelineVersion}
+              />
             )}
             {activeTab === 'tasks' && (
-              <TasksPomodoroView state={state} presets={presets} />
+              <TasksPomodoroView
+                state={state}
+                settings={settings}
+                presets={presets}
+                timelineVersion={timelineVersion}
+              />
             )}
-            {activeTab === 'report' && <DailyReportView settings={settings} />}
+            {activeTab === 'report' && (
+              <DailyReportView settings={settings} timelineVersion={timelineVersion} />
+            )}
             {activeTab === 'health' && <HealthView state={state} settings={settings} />}
             {activeTab === 'settings' && (
-              <SettingsView settings={settings} presets={presets} />
+              <SettingsView
+                settings={settings}
+                presets={presets}
+                updateStatus={updateStatus}
+                onUpdateStatusChange={onUpdateStatusChange}
+              />
             )}
           </div>
         </main>
@@ -253,6 +288,9 @@ export const MainWindow: React.FC<MainWindowProps> = ({
       {/* Browser Preview Overlays */}
       {!isElectronEnv && settings.stickyWidget.visible && (
         <StickyWidget state={state} settings={settings} presets={presets} embeddedPreview />
+      )}
+      {!isElectronEnv && settings.pomodoroWidget.visible && (
+        <PomodoroWidget state={state} settings={settings} embeddedPreview />
       )}
       {!isElectronEnv && state.pendingReturnPopup && (
         <ReturnPopup popup={state.pendingReturnPopup} embedded />

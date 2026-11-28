@@ -8,9 +8,11 @@ import {
   LiveTrackingState,
   MainTabId,
   PomodoroPreset,
+  PomodoroWidgetPrefs,
   QuickIdlePreset,
   QuickPresetIcon,
   StickyWidgetPrefs,
+  UpdateCheckResult,
   WorkPacerAPI
 } from '../shared/types'
 
@@ -33,6 +35,18 @@ const api: WorkPacerAPI = {
     const handler = (_e: unknown, presets: QuickIdlePreset[]): void => cb(presets)
     ipcRenderer.on('presets:updated', handler)
     return () => ipcRenderer.removeListener('presets:updated', handler)
+  },
+
+  onTimelineChanged: (cb: () => void) => {
+    const handler = (): void => cb()
+    ipcRenderer.on('timeline:changed', handler)
+    return () => ipcRenderer.removeListener('timeline:changed', handler)
+  },
+
+  onUpdateStatus: (cb: (result: UpdateCheckResult) => void) => {
+    const handler = (_e: unknown, result: UpdateCheckResult): void => cb(result)
+    ipcRenderer.on('update:status', handler)
+    return () => ipcRenderer.removeListener('update:status', handler)
   },
 
   onNavigateTab: (cb: (tab: MainTabId) => void) => {
@@ -76,6 +90,10 @@ const api: WorkPacerAPI = {
   pausePomodoro: () => ipcRenderer.invoke('pomodoro:pause'),
   resetPomodoro: () => ipcRenderer.invoke('pomodoro:reset'),
   skipPomodoroPhase: () => ipcRenderer.invoke('pomodoro:skip'),
+  togglePomodoroWidget: (visible?: boolean) =>
+    ipcRenderer.invoke('pomodoro:toggleWidget', visible),
+  updatePomodoroWidgetPrefs: (prefs: Partial<PomodoroWidgetPrefs>) =>
+    ipcRenderer.invoke('pomodoro:updateWidgetPrefs', prefs),
 
   triggerEyeBreakNow: () => ipcRenderer.invoke('health:triggerEyeBreakNow'),
   dismissBreakOverlay: (snoozeMinutes?: number) =>
@@ -95,7 +113,11 @@ const api: WorkPacerAPI = {
 
   getDailyReport: (dateStr: string, forceRegenerate?: boolean) =>
     ipcRenderer.invoke('report:get', dateStr, forceRegenerate),
-  saveDailyReport: (doc: DailyReportDocument) => ipcRenderer.invoke('report:save', doc)
+  saveDailyReport: (doc: DailyReportDocument) => ipcRenderer.invoke('report:save', doc),
+
+  getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
+  checkForUpdates: () => ipcRenderer.invoke('app:checkForUpdates'),
+  openExternalUrl: (url: string) => ipcRenderer.invoke('app:openExternalUrl', url)
 }
 
 contextBridge.exposeInMainWorld('workPacer', api)

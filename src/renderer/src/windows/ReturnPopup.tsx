@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
+  Check,
   Coffee,
   Footprints,
   Moon,
@@ -29,32 +30,26 @@ const TAG_OPTIONS: { tag: IdleTag; icon: React.FC<{ className?: string }> }[] = 
 
 export const ReturnPopup: React.FC<ReturnPopupProps> = ({ popup, embedded = false }) => {
   const { t } = useTranslation()
-  const [selectedTag, setSelectedTag] = useState<IdleTag | null>(null)
+  const [selectedTag, setSelectedTag] = useState<IdleTag | null>('rest')
   const [note, setNote] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   const awayMinutes = Math.max(1, Math.round(popup.durationSec / 60))
 
-  const handleTagClick = async (tag: IdleTag): Promise<void> => {
-    if (tag === 'other') {
-      setSelectedTag('other')
-      return
+  const handleSubmit = async (e?: React.FormEvent, forcedTag?: IdleTag): Promise<void> => {
+    e?.preventDefault()
+    if (submitting) return
+    const finalTag = forcedTag ?? selectedTag ?? (note.trim() ? 'other' : 'rest')
+    setSubmitting(true)
+    try {
+      await bridge.submitReturnTag(popup.sessionId, finalTag, note.trim())
+    } finally {
+      setSubmitting(false)
     }
-    await bridge.submitReturnTag(popup.sessionId, tag, note.trim())
   }
 
-  const handleSaveCustom = async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault()
-    await bridge.submitReturnTag(popup.sessionId, selectedTag ?? 'other', note.trim())
-  }
-
-  return (
-    <div
-      className={
-        embedded
-          ? 'fixed bottom-5 right-5 z-50 w-[372px] floating-surface p-4 space-y-3.5 animate-fluid-in'
-          : 'w-full h-full floating-surface p-4 space-y-3 flex flex-col justify-between animate-fluid-in overflow-y-auto'
-      }
-    >
+  const modalCard = (
+    <div className="floating-surface w-full h-full p-5 space-y-3.5 flex flex-col justify-between animate-fluid-in overflow-y-auto">
       <div className="drag-region flex items-start justify-between gap-2.5">
         <div className="flex items-center gap-2.5">
           <WorkPacerLogo size={28} />
@@ -84,7 +79,8 @@ export const ReturnPopup: React.FC<ReturnPopupProps> = ({ popup, embedded = fals
             <button
               key={tag}
               type="button"
-              onClick={() => void handleTagClick(tag)}
+              onClick={() => setSelectedTag(tag)}
+              onDoubleClick={() => void handleSubmit(undefined, tag)}
               className={`glass-pill-btn px-3 py-2 text-xs font-semibold flex items-center justify-center gap-1.5 ${
                 isSelected
                   ? '!bg-[var(--accent-soft)] !border-[var(--accent)] !text-[var(--accent)]'
@@ -98,28 +94,44 @@ export const ReturnPopup: React.FC<ReturnPopupProps> = ({ popup, embedded = fals
         })}
       </div>
 
-      <form onSubmit={(e) => void handleSaveCustom(e)} className="no-drag flex items-center gap-2">
+      <form onSubmit={(e) => void handleSubmit(e)} className="no-drag space-y-2.5">
         <input
+          autoFocus
           type="text"
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder={t('returnPopup.notePlaceholder')}
-          className="input-control flex-1 !rounded-full !py-1.5 !px-3.5 !text-xs"
+          className="input-control w-full !rounded-full !py-2 !px-3.5 !text-xs"
         />
-        {selectedTag === 'other' || note.trim() ? (
-          <button type="submit" className="btn-primary px-3.5 py-1.5 text-xs shrink-0">
-            {t('returnPopup.save')}
-          </button>
-        ) : (
+        <div className="flex items-center justify-end gap-2">
           <button
             type="button"
             onClick={() => void bridge.dismissReturnPopup()}
-            className="btn-subtle px-3.5 py-1.5 text-xs font-semibold shrink-0"
+            className="btn-subtle px-4 py-1.5 text-xs font-semibold"
           >
             {t('returnPopup.skip')}
           </button>
-        )}
+          <button
+            id="return-popup-save"
+            type="submit"
+            disabled={submitting}
+            className="btn-primary px-4 py-1.5 text-xs flex items-center gap-1.5"
+          >
+            <Check className="w-3.5 h-3.5" />
+            {t('returnPopup.save')}
+          </button>
+        </div>
       </form>
     </div>
   )
+
+  if (embedded) {
+    return (
+      <div className="fixed inset-0 z-50 bg-slate-900/25 dark:bg-slate-950/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="w-full max-w-[428px]">{modalCard}</div>
+      </div>
+    )
+  }
+
+  return <div className="floating-widget-shell">{modalCard}</div>
 }

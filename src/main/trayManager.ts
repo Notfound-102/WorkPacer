@@ -13,6 +13,7 @@ export interface TrayActions {
   onOpenMain: () => void
   onOpenDailyReport: () => void
   onToggleWidget: () => void
+  onTogglePomodoroWidget: () => void
   onTriggerPreset: (presetId: string) => void
   onTogglePause: () => void
   onResumeWork: () => void
@@ -41,17 +42,16 @@ function sdSegment(px: number, py: number, ax: number, ay: number, bx: number, b
 function renderTrayBitmapBGRA(size: number, status: TrayVisualStatus): Buffer {
   const buf = Buffer.alloc(size * size * 4)
   const badgeColors: Record<TrayVisualStatus, { r: number; g: number; b: number }> = {
-    active: { r: 16, g: 185, b: 129 }, // Emerald Green (#10B981)
-    idle: { r: 245, g: 158, b: 11 }, // Amber (#F59E0B)
-    pomodoro: { r: 244, g: 63, b: 94 }, // Coral Rose (#F43F5E)
-    paused: { r: 148, g: 163, b: 184 } // Neutral Slate (#94A3B8)
+    active: { r: 16, g: 185, b: 129 },
+    idle: { r: 245, g: 158, b: 11 },
+    pomodoro: { r: 244, g: 63, b: 94 },
+    paused: { r: 148, g: 163, b: 184 }
   }
   const accent = badgeColors[status]
   const aa = 2.2 / size
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      // Normalized [-1, 1]
       const nx = ((x + 0.5) / size) * 2 - 1
       const ny = ((y + 0.5) / size) * 2 - 1
 
@@ -71,7 +71,6 @@ function renderTrayBitmapBGRA(size: number, status: TrayVisualStatus): Buffer {
         outA = na
       }
 
-      // 1) High-contrast dark slate dial circle with bright rim so it stands out on BOTH light & dark taskbars
       const distCenter = Math.hypot(nx + 0.06, ny + 0.06)
       const dialOuter = 0.82
       const dDial = distCenter - dialOuter
@@ -80,16 +79,14 @@ function renderTrayBitmapBGRA(size: number, status: TrayVisualStatus): Buffer {
         blend(18, 28, 46, dialAlpha * 0.94)
       }
 
-      // Crisp white dial ring
       const dRing = Math.abs(distCenter - 0.68) - 0.105
       const ringAlpha = 1 - smoothstep(-aa, aa, dRing)
       if (ringAlpha > 0) {
         blend(248, 250, 252, ringAlpha * 0.95)
       }
 
-      // Clock / Pace hands inside dial
-      const dHand1 = sdSegment(nx, ny, -0.06, -0.06, 0.30, -0.34) - 0.115
-      const dHand2 = sdSegment(nx, ny, -0.06, -0.06, -0.28, -0.20) - 0.10
+      const dHand1 = sdSegment(nx, ny, -0.06, -0.06, 0.3, -0.34) - 0.115
+      const dHand2 = sdSegment(nx, ny, -0.06, -0.06, -0.28, -0.2) - 0.1
       const handAlpha = Math.max(
         1 - smoothstep(-aa, aa, dHand1),
         1 - smoothstep(-aa, aa, dHand2)
@@ -98,7 +95,6 @@ function renderTrayBitmapBGRA(size: number, status: TrayVisualStatus): Buffer {
         blend(255, 255, 255, handAlpha)
       }
 
-      // 2) Prominent bottom-right status indicator dot with dark halo separator
       const dotDist = Math.hypot(nx - 0.48, ny - 0.48)
       const haloAlpha = 1 - smoothstep(-aa, aa, dotDist - 0.46)
       if (haloAlpha > 0) {
@@ -110,7 +106,6 @@ function renderTrayBitmapBGRA(size: number, status: TrayVisualStatus): Buffer {
       }
 
       const idx = (y * size + x) * 4
-      // Electron createFromBitmap uses BGRA byte order on little-endian platforms
       buf[idx] = Math.round(clamp(outB, 0, 255))
       buf[idx + 1] = Math.round(clamp(outG, 0, 255))
       buf[idx + 2] = Math.round(clamp(outR, 0, 255))
@@ -120,10 +115,6 @@ function renderTrayBitmapBGRA(size: number, status: TrayVisualStatus): Buffer {
   return buf
 }
 
-/**
- * Builds a HiDPI (@1x 16x16 + @2x 32x32) WorkPacer System Tray NativeImage
- * for crisp rendering on Windows 10/11 Taskbar & macOS Retina Menu Bar.
- */
 function createWorkPacerTrayIcon(status: TrayVisualStatus): Electron.NativeImage {
   const img = nativeImage.createEmpty()
   img.addRepresentation({
@@ -192,7 +183,7 @@ export class TrayManager {
     }
 
     const presetSig = presets.map((p) => `${p.id}:${p.label}:${p.usageCount}`).join('|')
-    const menuSignature = `${lang}-${state.status}-${visualStatus}-${settings.stickyWidget.visible}-${presetSig}`
+    const menuSignature = `${lang}-${state.status}-${visualStatus}-${settings.stickyWidget.visible}-${settings.pomodoroWidget.visible}-${presetSig}`
     if (!force && menuSignature === this.lastMenuSignature) {
       return
     }
@@ -218,6 +209,12 @@ export class TrayManager {
         type: 'checkbox',
         checked: settings.stickyWidget.visible,
         click: () => this.actions.onToggleWidget()
+      },
+      {
+        label: translateMain(lang, 'tray.togglePomodoroWidget'),
+        type: 'checkbox',
+        checked: settings.pomodoroWidget.visible,
+        click: () => this.actions.onTogglePomodoroWidget()
       },
       {
         label: translateMain(lang, 'tray.openReport'),

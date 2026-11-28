@@ -2,7 +2,13 @@ import { existsSync } from 'fs'
 import { join } from 'path'
 import { app, BrowserWindow, nativeTheme, screen } from 'electron'
 import { IdlePulseDatabase } from './database'
-import { MainTabId, ResolvedTheme, StickyWidgetPrefs, ThemeMode } from '../shared/types'
+import {
+  MainTabId,
+  PomodoroWidgetPrefs,
+  ResolvedTheme,
+  StickyWidgetPrefs,
+  ThemeMode
+} from '../shared/types'
 
 const LIGHT_BG = '#edf3fb'
 const DARK_BG = '#080d1a'
@@ -12,13 +18,16 @@ const DARK_TITLEBAR = '#0b1222'
 export class WindowManager {
   private mainWindow: BrowserWindow | null = null
   private widgetWindow: BrowserWindow | null = null
+  private pomodoroWidgetWindow: BrowserWindow | null = null
   private returnPopupWindow: BrowserWindow | null = null
   private breakOverlayWindow: BrowserWindow | null = null
   private isQuitting = false
 
   private widgetBoundsTimer: NodeJS.Timeout | null = null
+  private pomoBoundsTimer: NodeJS.Timeout | null = null
   private popupBoundsTimer: NodeJS.Timeout | null = null
   private widgetFadeTimer: NodeJS.Timeout | null = null
+  private pomoFadeTimer: NodeJS.Timeout | null = null
 
   constructor(private db: IdlePulseDatabase) {}
 
@@ -33,10 +42,6 @@ export class WindowManager {
     return nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
   }
 
-  /**
-   * Synchronizes Electron's nativeTheme.themeSource, window background color,
-   * and Windows/Linux TitleBarOverlay caption colors immediately without white flash.
-   */
   public syncNativeTheme(mode: ThemeMode): ResolvedTheme {
     if (nativeTheme.themeSource !== mode) {
       nativeTheme.themeSource = mode
@@ -52,7 +57,10 @@ export class WindowManager {
 
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.setBackgroundColor(bg)
-      if (process.platform !== 'darwin' && typeof this.mainWindow.setTitleBarOverlay === 'function') {
+      if (
+        process.platform !== 'darwin' &&
+        typeof this.mainWindow.setTitleBarOverlay === 'function'
+      ) {
         try {
           this.mainWindow.setTitleBarOverlay({
             color: isDark ? DARK_TITLEBAR : LIGHT_TITLEBAR,
@@ -112,37 +120,45 @@ export class WindowManager {
       }
       step++
       const progress = step / steps
-      // Smooth ease-out curve matching cubic-bezier(0.22, 1, 0.36, 1)
       const eased = 1 - Math.pow(1 - progress, 3)
       win.setOpacity(Math.min(targetOpacity, eased * targetOpacity))
       if (step >= steps) {
         clearInterval(interval)
         win.setOpacity(targetOpacity)
       }
-    }, 28)
+    }, 26)
   }
 
-  private fadeOutAndHideWindow(win: BrowserWindow, closeAfter = false): void {
+  private fadeOutWindow(
+    win: BrowserWindow,
+    closeAfter: boolean,
+    timerSlot: 'widget' | 'pomo' | 'none' = 'none'
+  ): void {
     if (win.isDestroyed()) return
-    if (this.widgetFadeTimer) {
+    if (timerSlot === 'widget' && this.widgetFadeTimer) {
       clearInterval(this.widgetFadeTimer)
       this.widgetFadeTimer = null
     }
+    if (timerSlot === 'pomo' && this.pomoFadeTimer) {
+      clearInterval(this.pomoFadeTimer)
+      this.pomoFadeTimer = null
+    }
+
     const startOpacity = win.getOpacity()
     const steps = 5
     let step = 0
-    this.widgetFadeTimer = setInterval(() => {
+    const timer = setInterval(() => {
       if (win.isDestroyed()) {
-        if (this.widgetFadeTimer) clearInterval(this.widgetFadeTimer)
-        this.widgetFadeTimer = null
+        clearInterval(timer)
         return
       }
       step++
       const next = Math.max(0, startOpacity * (1 - step / steps))
       win.setOpacity(next)
       if (step >= steps) {
-        if (this.widgetFadeTimer) clearInterval(this.widgetFadeTimer)
-        this.widgetFadeTimer = null
+        clearInterval(timer)
+        if (timerSlot === 'widget') this.widgetFadeTimer = null
+        if (timerSlot === 'pomo') this.pomoFadeTimer = null
         if (closeAfter) {
           win.close()
         } else {
@@ -150,7 +166,10 @@ export class WindowManager {
           win.setOpacity(1)
         }
       }
-    }, 26)
+    }, 24)
+
+    if (timerSlot === 'widget') this.widgetFadeTimer = timer
+    if (timerSlot === 'pomo') this.pomoFadeTimer = timer
   }
 
   // --- 1. Main Application Window ---
@@ -219,18 +238,19 @@ export class WindowManager {
     return this.mainWindow
   }
 
-  // --- 2. Resizable Liquid Glass Floating Sticky Widget Window ---
+  // --- 2. Floating Sticky Widget Window (Zero square corner artifacts on Windows!) ---
   public syncStickyWidgetWindow(prefs: StickyWidgetPrefs): void {
     if (!prefs.visible) {
       if (this.widgetWindow && !this.widgetWindow.isDestroyed() && this.widgetWindow.isVisible()) {
-        this.fadeOutAndHideWindow(this.widgetWindow, false)
+        this.fadeOutWindow(this.widgetWindow, false, 'widget')
       }
       return
     }
 
-    const savedWidth = Math.min(520, Math.max(286, prefs.width ?? 332))
-    const savedHeight = Math.min(480, Math.max(248, prefs.height ?? 304))
-    const targetHeight = prefs.collapsed ? 58 : savedHeight
+    const collapsedHeight = 72
+    const savedWidth = Math.min(540, Math.max(296, prefs.width ?? 344))
+    const savedHeight = Math.min(500, Math.max(264, prefs.height ?? 316))
+    const targetHeight = prefs.collapsed ? collapsedHeight : savedHeight
 
     if (!this.widgetWindow || this.widgetWindow.isDestroyed()) {
       const display = screen.getPrimaryDisplay().workArea
@@ -239,35 +259,36 @@ export class WindowManager {
         prefs.x >= display.x - 100 &&
         prefs.x <= display.x + display.width - 80
           ? prefs.x
-          : display.x + display.width - savedWidth - 24
+          : display.x + display.width - savedWidth - 20
       const safeY =
         prefs.y !== undefined &&
         prefs.y >= display.y &&
         prefs.y <= display.y + display.height - 48
           ? prefs.y
-          : display.y + 44
+          : display.y + 40
 
       this.widgetWindow = new BrowserWindow({
         width: savedWidth,
         height: targetHeight,
-        minWidth: 286,
-        maxWidth: 520,
-        minHeight: prefs.collapsed ? 58 : 248,
-        maxHeight: prefs.collapsed ? 58 : 480,
+        minWidth: 296,
+        maxWidth: 540,
+        minHeight: prefs.collapsed ? collapsedHeight : 264,
+        maxHeight: prefs.collapsed ? collapsedHeight : 500,
         x: safeX,
         y: safeY,
         title: 'WorkPacer Widget',
         icon: this.getWindowIconPath(),
         frame: false,
         transparent: true,
+        hasShadow: false,
+        backgroundColor: '#00000000',
         resizable: !prefs.collapsed,
         maximizable: false,
         minimizable: false,
         fullscreenable: false,
         skipTaskbar: true,
         alwaysOnTop: prefs.alwaysOnTop,
-        hasShadow: true,
-        ...(process.platform === 'darwin' ? { vibrancy: 'hud' as const } : {}),
+        show: false,
         webPreferences: {
           preload: this.getPreloadPath(),
           contextIsolation: true,
@@ -318,8 +339,8 @@ export class WindowManager {
         prefs.alwaysOnTop ? 'floating' : 'normal'
       )
       this.widgetWindow.setResizable(!prefs.collapsed)
-      this.widgetWindow.setMinimumSize(286, prefs.collapsed ? 58 : 248)
-      this.widgetWindow.setMaximumSize(520, prefs.collapsed ? 58 : 480)
+      this.widgetWindow.setMinimumSize(296, prefs.collapsed ? collapsedHeight : 264)
+      this.widgetWindow.setMaximumSize(540, prefs.collapsed ? collapsedHeight : 500)
 
       const [curW, curH] = this.widgetWindow.getSize()
       if (curH !== targetHeight) {
@@ -334,29 +355,132 @@ export class WindowManager {
     }
   }
 
-  // --- 3. Resizable Return UX Quick Tag Popup Window ---
+  // --- 3. Floating Pomodoro Window (Always-on-Top, 3 Clock Styles, Zero Square Corners) ---
+  public syncPomodoroWidgetWindow(prefs: PomodoroWidgetPrefs): void {
+    if (!prefs.visible) {
+      if (
+        this.pomodoroWidgetWindow &&
+        !this.pomodoroWidgetWindow.isDestroyed() &&
+        this.pomodoroWidgetWindow.isVisible()
+      ) {
+        this.fadeOutWindow(this.pomodoroWidgetWindow, false, 'pomo')
+      }
+      return
+    }
+
+    const savedWidth = Math.min(440, Math.max(244, prefs.width ?? 276))
+    const savedHeight = Math.min(460, Math.max(264, prefs.height ?? 308))
+
+    if (!this.pomodoroWidgetWindow || this.pomodoroWidgetWindow.isDestroyed()) {
+      const display = screen.getPrimaryDisplay().workArea
+      const safeX =
+        prefs.x !== undefined &&
+        prefs.x >= display.x - 80 &&
+        prefs.x <= display.x + display.width - 80
+          ? prefs.x
+          : display.x + display.width - savedWidth - 28
+      const safeY =
+        prefs.y !== undefined &&
+        prefs.y >= display.y &&
+        prefs.y <= display.y + display.height - 48
+          ? prefs.y
+          : Math.min(display.y + display.height - savedHeight - 24, display.y + 370)
+
+      this.pomodoroWidgetWindow = new BrowserWindow({
+        width: savedWidth,
+        height: savedHeight,
+        minWidth: 244,
+        maxWidth: 440,
+        minHeight: 264,
+        maxHeight: 460,
+        x: safeX,
+        y: safeY,
+        title: 'WorkPacer Pomodoro',
+        icon: this.getWindowIconPath(),
+        frame: false,
+        transparent: true,
+        hasShadow: false,
+        backgroundColor: '#00000000',
+        resizable: true,
+        maximizable: false,
+        minimizable: false,
+        fullscreenable: false,
+        skipTaskbar: true,
+        alwaysOnTop: prefs.alwaysOnTop,
+        show: false,
+        webPreferences: {
+          preload: this.getPreloadPath(),
+          contextIsolation: true,
+          nodeIntegration: false,
+          sandbox: false
+        }
+      })
+
+      if (prefs.alwaysOnTop) {
+        this.pomodoroWidgetWindow.setAlwaysOnTop(true, 'floating')
+      }
+
+      const persistPomoBounds = (): void => {
+        if (this.pomoBoundsTimer) clearTimeout(this.pomoBoundsTimer)
+        this.pomoBoundsTimer = setTimeout(() => {
+          if (!this.pomodoroWidgetWindow || this.pomodoroWidgetWindow.isDestroyed()) return
+          const bounds = this.pomodoroWidgetWindow.getBounds()
+          const cur = this.db.getSettings()
+          this.db.updateSettings({
+            pomodoroWidget: {
+              ...cur.pomodoroWidget,
+              x: bounds.x,
+              y: bounds.y,
+              width: bounds.width,
+              height: bounds.height
+            }
+          })
+        }, 140)
+      }
+
+      this.pomodoroWidgetWindow.on('moved', persistPomoBounds)
+      this.pomodoroWidgetWindow.on('resized', persistPomoBounds)
+
+      this.pomodoroWidgetWindow.once('ready-to-show', () => {
+        if (this.pomodoroWidgetWindow && !this.pomodoroWidgetWindow.isDestroyed()) {
+          this.fadeInWindow(this.pomodoroWidgetWindow, 1, true)
+        }
+      })
+
+      this.loadRoute(this.pomodoroWidgetWindow, 'pomodoro-widget')
+    } else {
+      if (this.pomoFadeTimer) {
+        clearInterval(this.pomoFadeTimer)
+        this.pomoFadeTimer = null
+      }
+      this.pomodoroWidgetWindow.setAlwaysOnTop(
+        prefs.alwaysOnTop,
+        prefs.alwaysOnTop ? 'floating' : 'normal'
+      )
+      if (!this.pomodoroWidgetWindow.isVisible()) {
+        this.fadeInWindow(this.pomodoroWidgetWindow, 1, true)
+      } else {
+        this.pomodoroWidgetWindow.setOpacity(1)
+      }
+    }
+  }
+
+  // --- 4. Return Idle Modal Window (ALWAYS Centered on Primary Display WorkArea!) ---
   public showReturnPopup(): void {
     const workArea = screen.getPrimaryDisplay().workArea
     const saved = this.db.getSettings().returnPopupBounds
-    const width = Math.min(540, Math.max(348, saved?.width ?? 384))
-    const height = Math.min(440, Math.max(272, saved?.height ?? 298))
-    const x =
-      saved?.x !== undefined &&
-      saved.x >= workArea.x &&
-      saved.x <= workArea.x + workArea.width - 120
-        ? saved.x
-        : workArea.x + workArea.width - width - 20
-    const y =
-      saved?.y !== undefined &&
-      saved.y >= workArea.y &&
-      saved.y <= workArea.y + workArea.height - 100
-        ? saved.y
-        : workArea.y + workArea.height - height - 20
+    const width = Math.min(560, Math.max(392, saved?.width ?? 440))
+    const height = Math.min(460, Math.max(300, saved?.height ?? 336))
+    const x = Math.round(workArea.x + (workArea.width - width) / 2)
+    const y = Math.round(workArea.y + (workArea.height - height) / 2)
 
     if (this.returnPopupWindow && !this.returnPopupWindow.isDestroyed()) {
       this.returnPopupWindow.setBounds({ x, y, width, height })
+      this.returnPopupWindow.center()
       if (!this.returnPopupWindow.isVisible()) {
-        this.fadeInWindow(this.returnPopupWindow, 1, true)
+        this.fadeInWindow(this.returnPopupWindow, 1, false)
+      } else {
+        this.returnPopupWindow.focus()
       }
       return
     }
@@ -364,24 +488,25 @@ export class WindowManager {
     this.returnPopupWindow = new BrowserWindow({
       width,
       height,
-      minWidth: 348,
-      maxWidth: 540,
-      minHeight: 272,
-      maxHeight: 440,
+      minWidth: 392,
+      maxWidth: 560,
+      minHeight: 300,
+      maxHeight: 460,
       x,
       y,
-      title: 'WorkPacer Quick Tag',
+      center: true,
+      title: 'WorkPacer Idle Modal',
       icon: this.getWindowIconPath(),
       frame: false,
       transparent: true,
+      hasShadow: false,
+      backgroundColor: '#00000000',
       resizable: true,
       maximizable: false,
       minimizable: false,
       alwaysOnTop: true,
       skipTaskbar: true,
-      hasShadow: true,
       show: false,
-      ...(process.platform === 'darwin' ? { vibrancy: 'popover' as const } : {}),
       webPreferences: {
         preload: this.getPreloadPath(),
         contextIsolation: true,
@@ -391,23 +516,23 @@ export class WindowManager {
     })
     this.returnPopupWindow.setAlwaysOnTop(true, 'pop-up-menu')
 
-    const persistPopupBounds = (): void => {
+    const persistPopupSize = (): void => {
       if (this.popupBoundsTimer) clearTimeout(this.popupBoundsTimer)
       this.popupBoundsTimer = setTimeout(() => {
         if (!this.returnPopupWindow || this.returnPopupWindow.isDestroyed()) return
         const b = this.returnPopupWindow.getBounds()
         this.db.updateSettings({
-          returnPopupBounds: { x: b.x, y: b.y, width: b.width, height: b.height }
+          returnPopupBounds: { width: b.width, height: b.height }
         })
       }, 150)
     }
 
-    this.returnPopupWindow.on('moved', persistPopupBounds)
-    this.returnPopupWindow.on('resized', persistPopupBounds)
+    this.returnPopupWindow.on('resized', persistPopupSize)
 
     this.returnPopupWindow.once('ready-to-show', () => {
       if (this.returnPopupWindow && !this.returnPopupWindow.isDestroyed()) {
-        this.fadeInWindow(this.returnPopupWindow, 1, true)
+        this.returnPopupWindow.setBounds({ x, y, width, height })
+        this.fadeInWindow(this.returnPopupWindow, 1, false)
       }
     })
 
@@ -416,12 +541,12 @@ export class WindowManager {
 
   public closeReturnPopup(): void {
     if (this.returnPopupWindow && !this.returnPopupWindow.isDestroyed()) {
-      this.fadeOutAndHideWindow(this.returnPopupWindow, true)
+      this.fadeOutWindow(this.returnPopupWindow, true)
     }
     this.returnPopupWindow = null
   }
 
-  // --- 4. Fullscreen Frosted Liquid Glass 20-20-20 Break Overlay Window ---
+  // --- 5. Fullscreen Frosted Liquid Glass 20-20-20 Break Overlay Window ---
   public showBreakOverlay(): void {
     const bounds = screen.getPrimaryDisplay().bounds
 
@@ -442,12 +567,13 @@ export class WindowManager {
       icon: this.getWindowIconPath(),
       frame: false,
       transparent: true,
+      hasShadow: false,
+      backgroundColor: '#00000000',
       resizable: false,
       movable: false,
       alwaysOnTop: true,
       focusable: true,
       skipTaskbar: true,
-      hasShadow: false,
       show: false,
       webPreferences: {
         preload: this.getPreloadPath(),
@@ -469,7 +595,7 @@ export class WindowManager {
 
   public closeBreakOverlay(): void {
     if (this.breakOverlayWindow && !this.breakOverlayWindow.isDestroyed()) {
-      this.fadeOutAndHideWindow(this.breakOverlayWindow, true)
+      this.fadeOutWindow(this.breakOverlayWindow, true)
     }
     this.breakOverlayWindow = null
   }

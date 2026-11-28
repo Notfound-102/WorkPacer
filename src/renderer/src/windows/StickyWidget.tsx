@@ -16,7 +16,7 @@ import {
 import { AppSettings, LiveTrackingState, QuickIdlePreset } from '@shared/types'
 import { bridge } from '../lib/bridge'
 import { formatClockTimer } from '../lib/formatters'
-import { PresetIconView, WorkPacerLogo } from '../components/WorkPacerLogo'
+import { PresetIconView } from '../components/WorkPacerLogo'
 import { QuickPresetsManager } from '../components/QuickPresetsManager'
 
 interface StickyWidgetProps {
@@ -92,27 +92,12 @@ export const StickyWidget: React.FC<StickyWidgetProps> = ({
 
   const glassAlpha = Math.max(0.32, Math.min(0.98, prefs.opacity))
 
-  const wrapperStyle: React.CSSProperties = embeddedPreview
-    ? ({
-        position: 'fixed',
-        left: `${dragPos.x}px`,
-        top: `${dragPos.y}px`,
-        width: `${prefs.width ?? 332}px`,
-        zIndex: isPinned ? 60 : 30,
-        '--widget-glass-alpha': glassAlpha
-      } as React.CSSProperties)
-    : ({
-        width: '100%',
-        height: '100%',
-        '--widget-glass-alpha': glassAlpha
-      } as React.CSSProperties)
-
-  return (
+  const cardInner = (
     <div
-      style={wrapperStyle}
-      className="floating-surface overflow-hidden select-none text-[var(--text-primary)] flex flex-col justify-between animate-fluid-in"
+      style={{ '--widget-glass-alpha': glassAlpha } as React.CSSProperties}
+      className="floating-surface w-full h-full overflow-hidden select-none text-[var(--text-primary)] flex flex-col justify-between animate-fluid-in"
     >
-      {/* Frameless Liquid Glass Drag Bar (Pin Always-on-Top stays fixed here) */}
+      {/* Frameless Drag Bar — App logo completely hidden on Sticky Widget */}
       <div
         onMouseDown={handleMouseDownEmbedded}
         className={`drag-region flex items-center justify-between px-3.5 py-2.5 border-b border-[var(--border-subtle)] shrink-0 ${
@@ -120,8 +105,7 @@ export const StickyWidget: React.FC<StickyWidgetProps> = ({
         }`}
       >
         <div className="flex items-center gap-2 min-w-0">
-          <WorkPacerLogo size={18} />
-          <span className={`w-2 h-2 rounded-full shrink-0 ${statusTone.dot}`} />
+          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${statusTone.dot}`} />
           <span className="text-xs font-semibold truncate">{statusTone.label}</span>
           {isCollapsed && (
             <span className="font-mono text-xs font-bold tabular-nums text-[var(--accent)] ml-1">
@@ -215,7 +199,7 @@ export const StickyWidget: React.FC<StickyWidgetProps> = ({
         </div>
       </div>
 
-      {/* Glass Layer Translucency Slider (keeps text & buttons crisp!) */}
+      {/* Độ trong suốt Slider */}
       {showOpacity && !isCollapsed && (
         <div className="no-drag px-3.5 py-2 bg-[var(--bg-subtle)] border-b border-[var(--border-subtle)] flex items-center gap-2.5 text-xs shrink-0">
           <span className="text-[var(--text-secondary)] font-medium">{t('widget.opacity')}</span>
@@ -248,7 +232,6 @@ export const StickyWidget: React.FC<StickyWidgetProps> = ({
           ) : (
             <>
               <div className="space-y-2.5">
-                {/* Live Counter & Pause/Active Summary */}
                 <div className="flex items-center justify-between gap-2">
                   <div className="font-mono text-2xl sm:text-3xl font-bold tracking-tight tabular-nums">
                     {formatClockTimer(primarySeconds)}
@@ -277,7 +260,6 @@ export const StickyWidget: React.FC<StickyWidgetProps> = ({
                   </div>
                 </div>
 
-                {/* Active Task Pill */}
                 {state.activeTask && (
                   <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-full bg-[var(--accent-soft)] border border-[var(--border-subtle)] text-xs">
                     <span className="font-semibold truncate text-[var(--text-primary)]">
@@ -294,7 +276,6 @@ export const StickyWidget: React.FC<StickyWidgetProps> = ({
                   </div>
                 )}
 
-                {/* Quick Task Input */}
                 <form onSubmit={(e) => void handleQuickTaskSubmit(e)} className="flex gap-1.5">
                   <input
                     id="widget-quick-task-input"
@@ -314,7 +295,6 @@ export const StickyWidget: React.FC<StickyWidgetProps> = ({
                 </form>
               </div>
 
-              {/* Quick Manual Idle Buttons (Sorted by usage_count DESC, last_used_at DESC, up to 6) */}
               {state.status !== 'active' ? (
                 <button
                   id="widget-resume-work-btn"
@@ -328,9 +308,7 @@ export const StickyWidget: React.FC<StickyWidgetProps> = ({
               ) : (
                 <div
                   className={`grid gap-1.5 pt-0.5 ${
-                    presets.length <= 2
-                      ? 'grid-cols-2'
-                      : 'grid-cols-2 sm:grid-cols-3'
+                    presets.length <= 2 ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3'
                   }`}
                 >
                   {presets.map((preset) => (
@@ -356,4 +334,22 @@ export const StickyWidget: React.FC<StickyWidgetProps> = ({
       )}
     </div>
   )
+
+  if (embeddedPreview) {
+    return (
+      <div
+        style={{
+          position: 'fixed',
+          left: `${dragPos.x}px`,
+          top: `${dragPos.y}px`,
+          width: `${prefs.width ?? 344}px`,
+          zIndex: isPinned ? 60 : 30
+        }}
+      >
+        {cardInner}
+      </div>
+    )
+  }
+
+  return <div className="floating-widget-shell">{cardInner}</div>
 }

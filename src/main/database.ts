@@ -235,23 +235,39 @@ export class IdlePulseDatabase {
       .get('app_settings') as { value: string } | undefined
     if (!row) {
       this.saveSettings(DEFAULT_SETTINGS)
-      return { ...DEFAULT_SETTINGS, stickyWidget: { ...DEFAULT_SETTINGS.stickyWidget } }
+      return {
+        ...DEFAULT_SETTINGS,
+        stickyWidget: { ...DEFAULT_SETTINGS.stickyWidget },
+        pomodoroWidget: { ...DEFAULT_SETTINGS.pomodoroWidget }
+      }
     }
     try {
       const parsed = JSON.parse(row.value)
       return {
         ...DEFAULT_SETTINGS,
         ...parsed,
+        reportTitle:
+          typeof parsed.reportTitle === 'string'
+            ? parsed.reportTitle
+            : DEFAULT_SETTINGS.reportTitle,
         stickyWidget: {
           ...DEFAULT_SETTINGS.stickyWidget,
           ...(parsed.stickyWidget || {})
+        },
+        pomodoroWidget: {
+          ...DEFAULT_SETTINGS.pomodoroWidget,
+          ...(parsed.pomodoroWidget || {})
         },
         returnPopupBounds: parsed.returnPopupBounds
           ? { ...parsed.returnPopupBounds }
           : undefined
       }
     } catch {
-      return { ...DEFAULT_SETTINGS, stickyWidget: { ...DEFAULT_SETTINGS.stickyWidget } }
+      return {
+        ...DEFAULT_SETTINGS,
+        stickyWidget: { ...DEFAULT_SETTINGS.stickyWidget },
+        pomodoroWidget: { ...DEFAULT_SETTINGS.pomodoroWidget }
+      }
     }
   }
 
@@ -273,6 +289,10 @@ export class IdlePulseDatabase {
       stickyWidget: {
         ...current.stickyWidget,
         ...(partial.stickyWidget || {})
+      },
+      pomodoroWidget: {
+        ...current.pomodoroWidget,
+        ...(partial.pomodoroWidget || {})
       },
       returnPopupBounds:
         partial.returnPopupBounds !== undefined
@@ -481,6 +501,18 @@ export class IdlePulseDatabase {
 
   public getSessionById(id: number): SessionRecord | null {
     const row = this.db.prepare('SELECT * FROM sessions WHERE id = ?').get(id)
+    return row ? mapSessionRow(row) : null
+  }
+
+  public getLatestClosedIdleSession(): SessionRecord | null {
+    const row = this.db
+      .prepare(
+        `SELECT * FROM sessions
+         WHERE type IN ('auto_idle', 'manual_idle') AND end_time IS NOT NULL
+         ORDER BY end_time DESC, id DESC
+         LIMIT 1`
+      )
+      .get()
     return row ? mapSessionRow(row) : null
   }
 

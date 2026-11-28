@@ -1,4 +1,4 @@
-import { DailyReportRow, SessionRecord, TaskRecord } from './types'
+import { DailyReportRow, IdleTag, SessionRecord, TaskRecord } from './types'
 
 export function parseTimeToMinutes(timeStr: string): number {
   const clean = timeStr.trim()
@@ -34,23 +34,34 @@ export function getDayStartMs(dateStr: string): number {
   return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0).getTime()
 }
 
-export function formatNippoDateHeader(dateStr: string, userName: string): string {
+export function formatReportDateHeader(
+  dateStr: string,
+  userName: string,
+  reportTitle = 'Daily Report'
+): string {
   const slashDate = dateStr.replace(/-/g, '/')
   const displayUser = userName.trim() || 'User'
-  return `${slashDate} (${displayUser})日報`
+  const cleanTitle = reportTitle.trim()
+  return cleanTitle
+    ? `${slashDate} (${displayUser}) ${cleanTitle}`
+    : `${slashDate} (${displayUser})`
 }
 
+// Backward-compatible alias
+export const formatNippoDateHeader = formatReportDateHeader
+
 /**
- * Formats Daily Report into exact plain-text Tab-delimited Nippo format:
- * YYYY/MM/DD (Tên người dùng)日報
+ * Formats Daily Report into Tab-delimited plain-text format:
+ * YYYY/MM/DD (User Name) Daily Report
  * 8:30~9:30\tlàm gì
  */
 export function formatDailyReportPlainText(
   dateStr: string,
   userName: string,
-  rows: DailyReportRow[]
+  rows: DailyReportRow[],
+  reportTitle = 'Daily Report'
 ): string {
-  const header = formatNippoDateHeader(dateStr, userName)
+  const header = formatReportDateHeader(dateStr, userName, reportTitle)
   const lines = rows
     .filter((r) => r.startTime.trim() || r.endTime.trim() || r.content.trim())
     .map((r) => {
@@ -59,6 +70,55 @@ export function formatDailyReportPlainText(
       return `${start}~${end}\t${r.content.trim()}`
     })
   return [header, ...lines].join('\n')
+}
+
+export function sortReportRowsChronologically(rows: DailyReportRow[]): DailyReportRow[] {
+  return [...rows].sort((a, b) => {
+    const startDiff = parseTimeToMinutes(a.startTime) - parseTimeToMinutes(b.startTime)
+    if (startDiff !== 0) return startDiff
+    return parseTimeToMinutes(a.endTime) - parseTimeToMinutes(b.endTime)
+  })
+}
+
+export function isTimelineOrderChronological(rows: DailyReportRow[]): boolean {
+  for (let i = 0; i < rows.length - 1; i++) {
+    const curStart = parseTimeToMinutes(rows[i].startTime)
+    const nextStart = parseTimeToMinutes(rows[i + 1].startTime)
+    if (curStart > nextStart) {
+      return false
+    }
+  }
+  return true
+}
+
+/**
+ * Reorders a row from `fromIndex` to `toIndex`, enforcing chronological time order:
+ * A task with a later start time cannot be placed before a task with an earlier start time.
+ */
+export function reorderTimelineRowsWithConstraint(
+  rows: DailyReportRow[],
+  fromIndex: number,
+  toIndex: number
+): { valid: boolean; rows: DailyReportRow[] } {
+  if (
+    fromIndex === toIndex ||
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= rows.length ||
+    toIndex >= rows.length
+  ) {
+    return { valid: true, rows }
+  }
+
+  const candidate = [...rows]
+  const [moved] = candidate.splice(fromIndex, 1)
+  candidate.splice(toIndex, 0, moved)
+
+  if (!isTimelineOrderChronological(candidate)) {
+    return { valid: false, rows }
+  }
+
+  return { valid: true, rows: candidate }
 }
 
 interface MinuteSpan {
@@ -97,7 +157,42 @@ export interface SynthesizeOptions {
   tasks: TaskRecord[]
   defaultWorkLabel: string
   meetingLabel: string
+  tagLabels?: Partial<Record<IdleTag, string>>
   nowMs?: number
+}
+
+function formatTaggedIdleReason(
+  session: SessionRecord,
+  meetingLabel: string,
+  tagLabels?: Partial<Record<IdleTag, string>>
+): string | null {
+  const customNote = session.note?.trim() || ''
+  // Ignore auto-generated system notes when untagged
+  const isSystemAutoNote =
+    customNote === 'Screen locked' ||
+    customNote === 'System sleep' ||
+    customNote === 'System sleep / shutdown gap recovered'
+
+  const userNote = isSystemAutoNote ? '' : customNote
+
+  if (session.tag === 'meeting') {
+    return userNote ? `${meetingLabel}: ${userNote}` : meetingLabel
+  }
+
+  // Only include non-meeting idle sessions on the Timeline if the user explicitly typed a note
+  // or submitted a tag on an auto_idle Return Modal / custom note
+  if (userNote) {
+    if (session.tag && tagLabels?.[session.tag] && userNote !== tagLabels[session.tag]) {
+      return `${tagLabels[session.tag]}: ${userNote}`
+    }
+    return userNote
+  }
+
+  if (session.type === 'auto_idle' && session.tag && tagLabels?.[session.tag]) {
+    return tagLabels[session.tag]!
+  }
+
+  return null
 }
 
 export function synthesizeDailyReportRows(opts: SynthesizeOptions): DailyReportRow[] {
@@ -118,14 +213,9 @@ export function synthesizeDailyReportRows(opts: SynthesizeOptions): DailyReportR
 
   const effectiveEndMin = Math.max(shiftStartMin, currentDayMin || shiftEndMin)
 
-  // Build minute-by-minute timeline array [0..1440) for unambiguous priority resolution:
-  // Priority 1: Explicit non-meeting Idle >= mergeMicroBreaksMinutes => gap (null)
-  // Priority 2: Named TaskRecord => task.title
-  // Priority 3: Meeting tagged session => note || meetingLabel
-  // Priority 4: Active session => defaultWorkLabel
   const slots: (string | null)[] = new Array(24 * 60).fill(null)
 
-  // Step 1: Mark active & meeting sessions
+  // Step 1: Mark active sessions
   for (const s of opts.sessions) {
     const sStart = Math.max(shiftStartMin, epochToDayMinutes(s.startTime, dayStartMs))
     const rawEndMs = s.endTime ?? nowMs
@@ -136,15 +226,10 @@ export function synthesizeDailyReportRows(opts: SynthesizeOptions): DailyReportR
       for (let m = sStart; m < sEnd; m++) {
         slots[m] = opts.defaultWorkLabel
       }
-    } else if (s.tag === 'meeting') {
-      const label = s.note?.trim() ? `${opts.meetingLabel}: ${s.note.trim()}` : opts.meetingLabel
-      for (let m = sStart; m < sEnd; m++) {
-        slots[m] = label
-      }
     }
   }
 
-  // Step 2: Overlay named tasks (higher specificity than generic "Active")
+  // Step 2: Overlay named tasks
   for (const t of opts.tasks) {
     const tStart = Math.max(shiftStartMin, epochToDayMinutes(t.startTime, dayStartMs))
     const rawEndMs = t.endTime ?? nowMs
@@ -156,21 +241,31 @@ export function synthesizeDailyReportRows(opts: SynthesizeOptions): DailyReportR
     }
   }
 
-  // Step 3: Carve out real idle breaks (>= mergeMicroBreaksMinutes), while absorbing micro-breaks (< X min)
+  // Step 3: Apply idle breaks & user-submitted idle reasons (from Return Modal / Meetings)
   for (const s of opts.sessions) {
-    if (s.type === 'active' || s.tag === 'meeting') continue
+    if (s.type === 'active') continue
     const rawEndMs = s.endTime ?? nowMs
     const durMin = (rawEndMs - s.startTime) / 60000
     const sStart = Math.max(shiftStartMin, epochToDayMinutes(s.startTime, dayStartMs))
     const sEnd = Math.min(effectiveEndMin, epochToDayMinutes(rawEndMs, dayStartMs))
     if (sEnd <= sStart) continue
 
-    if (durMin >= opts.mergeMicroBreaksMinutes) {
+    const explicitReason =
+      s.type !== 'system_offline' && opts.tagLabels
+        ? formatTaggedIdleReason(s, opts.meetingLabel, opts.tagLabels)
+        : s.tag === 'meeting'
+          ? formatTaggedIdleReason(s, opts.meetingLabel)
+          : null
+
+    if (explicitReason) {
+      for (let m = sStart; m < sEnd; m++) {
+        slots[m] = explicitReason
+      }
+    } else if (durMin >= opts.mergeMicroBreaksMinutes) {
       for (let m = sStart; m < sEnd; m++) {
         slots[m] = null
       }
     } else {
-      // Micro-break < threshold: bridge with neighboring work label if surrounded by work
       const prevLabel = sStart > shiftStartMin ? slots[sStart - 1] : null
       if (prevLabel) {
         for (let m = sStart; m < sEnd; m++) {
@@ -203,7 +298,6 @@ export function synthesizeDailyReportRows(opts: SynthesizeOptions): DailyReportR
       const prev = merged[merged.length - 1]
       const curr = spans[i]
       const gap = curr.startMin - prev.endMin
-      // Do not bridge across lunch if hideLunch is enabled
       const crossesLunch =
         opts.hideLunch && prev.endMin <= lunchStartMin && curr.startMin >= lunchEndMin
       if (
@@ -225,7 +319,6 @@ export function synthesizeDailyReportRows(opts: SynthesizeOptions): DailyReportR
     spans = subtractInterval(spans, lunchStartMin, lunchEndMin)
   }
 
-  // Fallback starter template if no activity exists in shift window yet
   if (spans.length === 0 && shiftEndMin > shiftStartMin) {
     if (opts.hideLunch && lunchStartMin > shiftStartMin && lunchEndMin < shiftEndMin) {
       spans = [

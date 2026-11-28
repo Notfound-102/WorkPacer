@@ -494,15 +494,30 @@ export class IdleTrackingEngine extends EventEmitter {
     this.emitState()
   }
 
-  public submitReturnTag(sessionId: number, tag: IdleTag | null, note = ''): void {
-    if (tag) {
-      this.db.updateSessionTag(sessionId, tag, note)
+  public submitReturnTag(sessionId: number, tag: IdleTag | null, note = ''): SessionRecord | null {
+    const cleanNote = note.trim()
+    const effectiveTag: IdleTag | null = tag ?? (cleanNote ? 'other' : null)
+
+    let target = sessionId > 0 ? this.db.getSessionById(sessionId) : null
+    if (!target) {
+      target = this.db.getLatestClosedIdleSession()
     }
-    if (this.pendingReturnPopup?.sessionId === sessionId) {
+
+    let updated: SessionRecord | null = null
+    if (target && (effectiveTag || cleanNote)) {
+      updated = this.db.updateSessionTag(target.id, effectiveTag, cleanNote)
+    }
+
+    if (
+      !this.pendingReturnPopup ||
+      this.pendingReturnPopup.sessionId === sessionId ||
+      (target && this.pendingReturnPopup.sessionId === target.id)
+    ) {
       this.pendingReturnPopup = null
     }
     this.emit('return-popup-closed')
     this.emitState()
+    return updated
   }
 
   public dismissReturnPopup(): void {

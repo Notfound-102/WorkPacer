@@ -12,15 +12,23 @@ import {
   MainTabId,
   MAX_QUICK_IDLE_PRESETS,
   PomodoroPreset,
+  PomodoroWidgetPrefs,
   QuickIdlePreset,
   QuickPresetIcon,
   ResolvedTheme,
   SessionRecord,
   StickyWidgetPrefs,
   TaskRecord,
+  UpdateCheckResult,
   WorkPacerAPI
 } from '@shared/types'
-import { getDayStartMs, synthesizeDailyReportRows } from '@shared/reportFormatter'
+import {
+  epochToDayMinutes,
+  getDayStartMs,
+  minutesToReportTime,
+  sortReportRowsChronologically,
+  synthesizeDailyReportRows
+} from '@shared/reportFormatter'
 import { translateMain } from '@shared/i18nResources'
 import { getTodayDateString } from './formatters'
 
@@ -31,7 +39,8 @@ export function createMockBridge(): WorkPacerAPI & {
 } {
   let settings: AppSettings = {
     ...DEFAULT_SETTINGS,
-    stickyWidget: { ...DEFAULT_SETTINGS.stickyWidget, visible: true }
+    stickyWidget: { ...DEFAULT_SETTINGS.stickyWidget, visible: false },
+    pomodoroWidget: { ...DEFAULT_SETTINGS.pomodoroWidget, visible: false }
   }
 
   let presets: QuickIdlePreset[] = [
@@ -164,7 +173,7 @@ export function createMockBridge(): WorkPacerAPI & {
     },
     {
       id: 3,
-      title: 'Hoàn thiện Báo cáo cuối ngày (日報)',
+      title: 'Hoàn thiện Báo cáo cuối ngày',
       startTime: Date.now() - 34 * 60 * 1000,
       endTime: null,
       durationSec: 34 * 60,
@@ -176,6 +185,8 @@ export function createMockBridge(): WorkPacerAPI & {
   const stateListeners = new Set<Listener<LiveTrackingState>>()
   const settingsListeners = new Set<Listener<AppSettings>>()
   const presetListeners = new Set<Listener<QuickIdlePreset[]>>()
+  const timelineListeners = new Set<() => void>()
+  const updateListeners = new Set<Listener<UpdateCheckResult>>()
   const navListeners = new Set<Listener<MainTabId>>()
 
   let eyeCareRemainingSec = 14 * 60 + 25
@@ -272,6 +283,10 @@ export function createMockBridge(): WorkPacerAPI & {
     presetListeners.forEach((cb) => cb(sortPresets(presets)))
   }
 
+  function notifyTimelineChanged(): void {
+    timelineListeners.forEach((cb) => cb())
+  }
+
   setInterval(() => {
     if (!isPaused) {
       const cur = getCurrentOpenSession()
@@ -293,6 +308,10 @@ export function createMockBridge(): WorkPacerAPI & {
             activeBreakOverlay = { kind: 'eye_20_20_20', countdownSec: 20 }
           }
         }
+      }
+
+      if (pomodoro.running && pomodoro.remainingSec > 0) {
+        pomodoro = { ...pomodoro, remainingSec: pomodoro.remainingSec - 1 }
       }
     }
     notifyState()
@@ -317,6 +336,14 @@ export function createMockBridge(): WorkPacerAPI & {
       presetListeners.add(cb)
       return () => presetListeners.delete(cb)
     },
+    onTimelineChanged: (cb) => {
+      timelineListeners.add(cb)
+      return () => timelineListeners.delete(cb)
+    },
+    onUpdateStatus: (cb) => {
+      updateListeners.add(cb)
+      return () => updateListeners.delete(cb)
+    },
     onNavigateTab: (cb) => {
       navListeners.add(cb)
       return () => navListeners.delete(cb)
@@ -329,6 +356,10 @@ export function createMockBridge(): WorkPacerAPI & {
         stickyWidget: {
           ...settings.stickyWidget,
           ...(partial.stickyWidget || {})
+        },
+        pomodoroWidget: {
+          ...settings.pomodoroWidget,
+          ...(partial.pomodoroWidget || {})
         }
       }
       notifySettings()
@@ -364,6 +395,7 @@ export function createMockBridge(): WorkPacerAPI & {
         isManual: true
       })
       notifyState()
+      notifyTimelineChanged()
     },
 
     resumeFromIdle: async () => {
@@ -392,6 +424,7 @@ export function createMockBridge(): WorkPacerAPI & {
         isManual: false
       })
       notifyState()
+      notifyTimelineChanged()
     },
 
     togglePauseTracking: async () => {
@@ -461,6 +494,7 @@ export function createMockBridge(): WorkPacerAPI & {
       }
       notifyPresets()
       notifyState()
+      notifyTimelineChanged()
       return sortPresets(presets)
     },
 
@@ -490,13 +524,31 @@ export function createMockBridge(): WorkPacerAPI & {
     },
 
     submitReturnTag: async (sessionId, tag, note = '') => {
+      const cleanNote = note.trim()
+      const effectiveTag = tag ?? (cleanNote ? 'other' : null)
       const found = sessions.find((s) => s.id === sessionId)
-      if (found && tag) {
-        found.tag = tag
-        found.note = note
+      if (found && (effectiveTag || cleanNote)) {
+        found.tag = effectiveTag
+        found.note = cleanNote
+        const existingReport = savedReports.get(todayStr)
+        if (existingReport) {
+          const sMin = epochToDayMinutes(found.startTime, dayStart)
+          const eMin = Math.max(sMin + 1, epochToDayMinutes(found.endTime ?? Date.now(), dayStart))
+          const label = cleanNote || (effectiveTag ? translateMain(settings.language, `tags.${effectiveTag}`) : 'Other')
+          existingReport.rows = sortReportRowsChronologically([
+            ...existingReport.rows.filter((r) => r.id !== `idle-session-${found.id}`),
+            {
+              id: `idle-session-${found.id}`,
+              startTime: minutesToReportTime(sMin),
+              endTime: minutesToReportTime(eMin),
+              content: label
+            }
+          ])
+        }
       }
       pendingReturnPopup = null
       notifyState()
+      notifyTimelineChanged()
     },
 
     dismissReturnPopup: async () => {
@@ -522,6 +574,7 @@ export function createMockBridge(): WorkPacerAPI & {
       }
       tasks = [...tasks, created]
       notifyState()
+      notifyTimelineChanged()
       return created
     },
 
@@ -537,6 +590,7 @@ export function createMockBridge(): WorkPacerAPI & {
           : t
       )
       notifyState()
+      notifyTimelineChanged()
     },
 
     getTasksByDate: async () => [...tasks],
@@ -544,11 +598,13 @@ export function createMockBridge(): WorkPacerAPI & {
     updateTask: async (id, updates) => {
       tasks = tasks.map((t) => (t.id === id ? { ...t, ...updates } : t))
       notifyState()
+      notifyTimelineChanged()
     },
 
     deleteTask: async (id) => {
       tasks = tasks.filter((t) => t.id !== id)
       notifyState()
+      notifyTimelineChanged()
     },
 
     startPomodoro: async (preset?: PomodoroPreset, customFocus?: number, customBreak?: number) => {
@@ -609,6 +665,25 @@ export function createMockBridge(): WorkPacerAPI & {
         }
       }
       notifyState()
+    },
+
+    togglePomodoroWidget: async (visible?: boolean) => {
+      const next = visible !== undefined ? visible : !settings.pomodoroWidget.visible
+      settings = {
+        ...settings,
+        pomodoroWidget: { ...settings.pomodoroWidget, visible: next }
+      }
+      notifySettings()
+      return settings
+    },
+
+    updatePomodoroWidgetPrefs: async (prefs: Partial<PomodoroWidgetPrefs>) => {
+      settings = {
+        ...settings,
+        pomodoroWidget: { ...settings.pomodoroWidget, ...prefs }
+      }
+      notifySettings()
+      return settings
     },
 
     triggerEyeBreakNow: async () => {
@@ -672,8 +747,14 @@ export function createMockBridge(): WorkPacerAPI & {
               }
             })
           : [
-              { label: '11/24', activeMin: 425, idleMin: 78, microMin: 13, shortMin: 20, longMin: 45 },
-              { label: '11/25', activeMin: 398, idleMin: 91, microMin: 16, shortMin: 30, longMin: 45 },
+              {
+                label: '11/25',
+                activeMin: 398,
+                idleMin: 91,
+                microMin: 16,
+                shortMin: 30,
+                longMin: 45
+              },
               {
                 label: '11/26',
                 activeMin: Math.round(st.todayActiveSec / 60),
@@ -757,7 +838,26 @@ export function createMockBridge(): WorkPacerAPI & {
     saveDailyReport: async (doc) => {
       const updated = { ...doc, updatedAt: Date.now() }
       savedReports.set(doc.date, updated)
+      notifyTimelineChanged()
       return updated
+    },
+
+    getAppVersion: async () => '1.2.0',
+
+    checkForUpdates: async () => {
+      const res: UpdateCheckResult = {
+        checkedAt: Date.now(),
+        currentVersion: '1.2.0',
+        latestVersion: 'v1.2.0',
+        hasUpdate: false,
+        releaseUrl: 'https://github.com/Notfound-102/WorkPacer/releases'
+      }
+      updateListeners.forEach((cb) => cb(res))
+      return res
+    },
+
+    openExternalUrl: async (url: string) => {
+      window.open(url, '_blank', 'noopener,noreferrer')
     }
   }
 }
