@@ -7,3 +7,4 @@ dist-web/
 *.sqlite-wal
 *.sqlite-shm
 *.tsbuildinfo
+*.zip

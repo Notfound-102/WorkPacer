@@ -4,15 +4,16 @@ directories:
   buildResources: build
   output: dist
 files:
+  - "out/**/*"
+  - "resources/**/*"
+  - "build/icon.*"
   - "!**/.vscode/*"
   - "!src/*"
   - "!scripts/*"
   - "!electron.vite.config.{js,ts,mjs,cjs}"
-  - "!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md,DEV_EDIT_GUIDE.md}"
+  - "!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md,DEV_EDIT_GUIDE.md,USER_GUIDE.md}"
   - "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json,vitest.config.ts,vite.web.config.ts}"
   - "!tests/*"
-  - "resources/**/*"
-  - "build/icon.*"
 asarUnpack:
   - "**/*.node"
 win:
